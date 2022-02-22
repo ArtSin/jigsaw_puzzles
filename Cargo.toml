@@ -1,0 +1,18 @@
+[package]
+name = "jigsaw_puzzles"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+iced = { version = "0.3.0", features = ["image", "tokio"] }
+iced_aw = { git = "https://github.com/iced-rs/iced_aw", branch = "main", default-features = false, features = ["number_input", "card", "modal", "colors"] }
+native-dialog = "0.6.3"
+image = "0.24.1"
+lab = "0.11.0"
+alphanumeric-sort = "1.4.3"
+rand = "0.8.5"
+rand_xoshiro = "0.6.0"
+float-ord = "0.3.2"
+rayon = "1.5.1"
