@@ -1,4 +1,4 @@
-use std::{error::Error, mem::swap, sync::Arc};
+use std::{error::Error, mem::swap, sync::Arc, time::Instant};
 
 use iced::{button, Command};
 use native_dialog::FileDialog;
@@ -31,6 +31,8 @@ pub struct AppState {
 
     load_images_state: LoadImagesState,
     algorithm_state: AlgorithmState,
+
+    algorithm_start_time: Option<Instant>,
 
     ui: AppUIState,
 }
@@ -74,6 +76,7 @@ impl Default for AppState {
             rand_seed: 1,
             load_images_state: LoadImagesState::NotLoaded,
             algorithm_state: AlgorithmState::NotStarted,
+            algorithm_start_time: None,
             ui: Default::default(),
         }
     }
@@ -269,6 +272,8 @@ impl AppState {
                 };
                 match algorithm_message {
                     AlgorithmMessage::Initialization(request) => {
+                        self.algorithm_start_time = Some(Instant::now());
+
                         self.algorithm_state = AlgorithmState::Running(
                             AlgorithmData::create_from_request(request.clone()),
                         );
@@ -293,6 +298,13 @@ impl AppState {
                             _ => unreachable!(),
                         });
                         swap(&mut state, &mut self.algorithm_state);
+
+                        let algorithm_duration =
+                            Instant::now() - self.algorithm_start_time.unwrap();
+                        println!(
+                            "Время выполнения алгоритма: {:.6} с",
+                            algorithm_duration.as_secs_f32()
+                        );
                         Ok(Command::none())
                     }
                     AlgorithmMessage::Error(error) => {

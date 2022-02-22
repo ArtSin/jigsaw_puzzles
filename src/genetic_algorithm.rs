@@ -380,7 +380,7 @@ pub fn algorithm_step(
     img_height: usize,
     image_generations_processed: usize,
     pieces_compatibility: &[Vec<Vec<f32>>; 2],
-    current_generation: &Vec<Chromosome>,
+    current_generation: &[Chromosome],
 ) -> Vec<Chromosome> {
     // Создание нового поколения
     let mut new_generation: Vec<Chromosome> = if image_generations_processed == 0 {
@@ -400,7 +400,7 @@ pub fn algorithm_step(
         let curr_gen_dissimilarities: Vec<_> = current_generation
             .iter()
             .map(|chromosome| {
-                chromosome_dissimilarity(img_width, img_height, &pieces_compatibility, chromosome)
+                chromosome_dissimilarity(img_width, img_height, pieces_compatibility, chromosome)
             })
             .collect();
         let max_dissimilarity = curr_gen_dissimilarities
@@ -436,7 +436,7 @@ pub fn algorithm_step(
                 chromosomes_crossover(
                     img_width,
                     img_height,
-                    &pieces_compatibility,
+                    pieces_compatibility,
                     &current_generation[i],
                     &current_generation[j],
                     rng,
@@ -453,7 +453,7 @@ pub fn algorithm_step(
         FloatOrd(chromosome_dissimilarity(
             img_width,
             img_height,
-            &pieces_compatibility,
+            pieces_compatibility,
             chromosome,
         ))
     });
