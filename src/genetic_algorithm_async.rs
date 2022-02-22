@@ -174,15 +174,15 @@ pub fn algorithm_next(
                 }));
             }
             // Подготовка - вычисление совместимостей деталей
-            let pieces_dissimilarity = calculate_dissimilarities(
-                &images[request.images_processed],
-                request.img_width,
-                request.img_height,
-                request.piece_size as usize,
-            );
-            let pieces_buddies =
-                find_best_buddies(request.img_width, request.img_height, &pieces_dissimilarity);
             if !request.image_prepared {
+                let pieces_dissimilarity = calculate_dissimilarities(
+                    &images[request.images_processed],
+                    request.img_width,
+                    request.img_height,
+                    request.piece_size as usize,
+                );
+                let pieces_buddies =
+                    find_best_buddies(request.img_width, request.img_height, &pieces_dissimilarity);
                 return Ok(AlgorithmMessage::Update(AlgorithmDataResponse {
                     rng: request.rng,
                     images_processed: request.images_processed,
