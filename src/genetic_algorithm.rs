@@ -1,4 +1,7 @@
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    collections::BTreeSet,
+};
 
 use float_ord::FloatOrd;
 use image::RgbaImage;
@@ -13,7 +16,7 @@ pub type Chromosome = Vec<Vec<(usize, usize)>>;
 const ELITISM_COUNT: usize = 4;
 
 // Вычисление совместимостей деталей
-pub fn calculate_compatibility(
+pub fn calculate_dissimilarities(
     image: &RgbaImage,
     img_width: usize,
     img_height: usize,
@@ -80,11 +83,47 @@ pub fn calculate_compatibility(
     [right_dissimilarity, down_dissimilarity]
 }
 
+pub fn find_best_buddies(
+    img_width: usize,
+    img_height: usize,
+    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
+) -> [Vec<(usize, usize)>; 4] {
+    let get_buddies = |i: usize| {
+        pieces_dissimilarity[i]
+            .iter()
+            .map(|v| {
+                v.iter()
+                    .enumerate()
+                    .reduce(|x, y| if x.1 <= y.1 { x } else { y })
+                    .map(|(i, _)| (i / img_width, i % img_width))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>()
+    };
+    let right_buddies = get_buddies(0);
+    let down_buddies = get_buddies(1);
+
+    let get_reverse_buddies = |buddies: &[(usize, usize)]| {
+        let mut res = vec![(usize::MAX, usize::MAX); buddies.len()];
+        for r in 0..img_height {
+            for c in 0..img_width {
+                let (i, j) = buddies[r * img_width + c];
+                res[i * img_width + j] = (r, c);
+            }
+        }
+        res
+    };
+    let left_buddies = get_reverse_buddies(&right_buddies);
+    let up_buddies = get_reverse_buddies(&down_buddies);
+
+    [right_buddies, down_buddies, left_buddies, up_buddies]
+}
+
 // Оценка хромосомы
 fn chromosome_dissimilarity(
     img_width: usize,
     img_height: usize,
-    pieces_compatibility: &[Vec<Vec<f32>>; 2],
+    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
     chromosome: &Chromosome,
 ) -> f32 {
     let right_dissimilarities = (0..img_height)
@@ -93,7 +132,7 @@ fn chromosome_dissimilarity(
                 .map(|i_c| {
                     let (j_r, j_c) = chromosome[i_r][i_c];
                     let (k_r, k_c) = chromosome[i_r][i_c + 1];
-                    pieces_compatibility[0][j_r * img_width + j_c][k_r * img_width + k_c]
+                    pieces_dissimilarity[0][j_r * img_width + j_c][k_r * img_width + k_c]
                 })
                 .sum::<f32>()
         })
@@ -104,7 +143,7 @@ fn chromosome_dissimilarity(
                 .map(|i_c| {
                     let (j_r, j_c) = chromosome[i_r][i_c];
                     let (k_r, k_c) = chromosome[i_r + 1][i_c];
-                    pieces_compatibility[1][j_r * img_width + j_c][k_r * img_width + k_c]
+                    pieces_dissimilarity[1][j_r * img_width + j_c][k_r * img_width + k_c]
                 })
                 .sum::<f32>()
         })
@@ -129,7 +168,8 @@ fn generate_random_chromosome<T: Rng>(
 fn chromosomes_crossover(
     img_width: usize,
     img_height: usize,
-    pieces_compatibility: &[Vec<Vec<f32>>; 2],
+    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
+    pieces_buddies: &[Vec<(usize, usize)>; 4],
     chromosome_1: &Chromosome,
     chromosome_2: &Chromosome,
     mut rng: Xoshiro256PlusPlus,
@@ -151,8 +191,7 @@ fn chromosomes_crossover(
         }
     }
 
-    // TODO: BTreeSet??
-    let mut free_pieces: Vec<_> = (0..img_height)
+    let mut free_pieces: BTreeSet<_> = (0..img_height)
         .flat_map(|r| (0..img_width).map(move |c| (r, c)))
         .collect();
     let mut free_positions = Vec::new();
@@ -285,6 +324,93 @@ fn chromosomes_crossover(
         }
 
         // Phase 2 (best-buddy)
+        if selected_pos.is_none() {
+            if let Some((pos, piece)) = free_positions
+                .iter()
+                .filter_map(|(pos_r, pos_c)| {
+                    // Деталь слева
+                    if *pos_c != 0 {
+                        let (left_piece_r, left_piece_c) = tmp_chromosome[*pos_r][*pos_c - 1];
+                        if left_piece_r != usize::MAX {
+                            let best_buddy =
+                                pieces_buddies[0][left_piece_r * img_width + left_piece_c];
+                            let (pos_1_r, pos_1_c) =
+                                pos_in_chromosome_1[left_piece_r][left_piece_c];
+                            let (pos_2_r, pos_2_c) =
+                                pos_in_chromosome_2[left_piece_r][left_piece_c];
+                            if ((pos_1_c != img_width - 1
+                                && chromosome_1[pos_1_r][pos_1_c + 1] == best_buddy)
+                                || (pos_2_c != img_width - 1
+                                    && chromosome_2[pos_2_r][pos_2_c + 1] == best_buddy))
+                                && free_pieces.contains(&best_buddy)
+                            {
+                                return Some(((*pos_r, *pos_c), best_buddy));
+                            }
+                        }
+                    }
+                    // Деталь справа
+                    if *pos_c != 2 * img_width - 1 {
+                        let (right_piece_r, right_piece_c) = tmp_chromosome[*pos_r][*pos_c + 1];
+                        if right_piece_r != usize::MAX {
+                            let best_buddy =
+                                pieces_buddies[2][right_piece_r * img_width + right_piece_c];
+                            let (pos_1_r, pos_1_c) =
+                                pos_in_chromosome_1[right_piece_r][right_piece_c];
+                            let (pos_2_r, pos_2_c) =
+                                pos_in_chromosome_2[right_piece_r][right_piece_c];
+                            if ((pos_1_c != 0 && chromosome_1[pos_1_r][pos_1_c - 1] == best_buddy)
+                                || (pos_2_c != 0
+                                    && chromosome_2[pos_2_r][pos_2_c - 1] == best_buddy))
+                                && free_pieces.contains(&best_buddy)
+                            {
+                                return Some(((*pos_r, *pos_c), best_buddy));
+                            }
+                        }
+                    }
+                    // Деталь сверху
+                    if *pos_r != 0 {
+                        let (up_piece_r, up_piece_c) = tmp_chromosome[*pos_r - 1][*pos_c];
+                        if up_piece_r != usize::MAX {
+                            let best_buddy = pieces_buddies[1][up_piece_r * img_width + up_piece_c];
+                            let (pos_1_r, pos_1_c) = pos_in_chromosome_1[up_piece_r][up_piece_c];
+                            let (pos_2_r, pos_2_c) = pos_in_chromosome_2[up_piece_r][up_piece_c];
+                            if ((pos_1_r != img_height - 1
+                                && chromosome_1[pos_1_r + 1][pos_1_c] == best_buddy)
+                                || (pos_2_r != img_height - 1
+                                    && chromosome_2[pos_2_r + 1][pos_2_c] == best_buddy))
+                                && free_pieces.contains(&best_buddy)
+                            {
+                                return Some(((*pos_r, *pos_c), best_buddy));
+                            }
+                        }
+                    }
+                    // Деталь снизу
+                    if *pos_r != 2 * img_height - 1 {
+                        let (down_piece_r, down_piece_c) = tmp_chromosome[*pos_r + 1][*pos_c];
+                        if down_piece_r != usize::MAX {
+                            let best_buddy =
+                                pieces_buddies[3][down_piece_r * img_width + down_piece_c];
+                            let (pos_1_r, pos_1_c) =
+                                pos_in_chromosome_1[down_piece_r][down_piece_c];
+                            let (pos_2_r, pos_2_c) =
+                                pos_in_chromosome_2[down_piece_r][down_piece_c];
+                            if ((pos_1_r != 0 && chromosome_1[pos_1_r - 1][pos_1_c] == best_buddy)
+                                || (pos_2_r != 0
+                                    && chromosome_2[pos_2_r - 1][pos_2_c] == best_buddy))
+                                && free_pieces.contains(&best_buddy)
+                            {
+                                return Some(((*pos_r, *pos_c), best_buddy));
+                            }
+                        }
+                    }
+                    None
+                })
+                .choose(&mut rng)
+            {
+                selected_pos = Some(pos);
+                selected_piece = Some(piece);
+            }
+        }
 
         // Phase 3 (most compatible)
         if selected_pos.is_none() {
@@ -298,7 +424,7 @@ fn chromosomes_crossover(
                 if pos_c != 0 {
                     let (left_piece_r, left_piece_c) = tmp_chromosome[pos_r][pos_c - 1];
                     if left_piece_r != usize::MAX {
-                        res += pieces_compatibility[0][left_piece_r * img_width + left_piece_c]
+                        res += pieces_dissimilarity[0][left_piece_r * img_width + left_piece_c]
                             [piece_r * img_width + piece_c];
                     }
                 }
@@ -306,7 +432,7 @@ fn chromosomes_crossover(
                 if pos_c != 2 * img_width - 1 {
                     let (right_piece_r, right_piece_c) = tmp_chromosome[pos_r][pos_c + 1];
                     if right_piece_r != usize::MAX {
-                        res += pieces_compatibility[0][piece_r * img_width + piece_c]
+                        res += pieces_dissimilarity[0][piece_r * img_width + piece_c]
                             [right_piece_r * img_width + right_piece_c];
                     }
                 }
@@ -314,7 +440,7 @@ fn chromosomes_crossover(
                 if pos_r != 0 {
                     let (up_piece_r, up_piece_c) = tmp_chromosome[pos_r - 1][pos_c];
                     if up_piece_r != usize::MAX {
-                        res += pieces_compatibility[1][up_piece_r * img_width + up_piece_c]
+                        res += pieces_dissimilarity[1][up_piece_r * img_width + up_piece_c]
                             [piece_r * img_width + piece_c];
                     }
                 }
@@ -322,7 +448,7 @@ fn chromosomes_crossover(
                 if pos_r != 2 * img_height - 1 {
                     let (down_piece_r, down_piece_c) = tmp_chromosome[pos_r + 1][pos_c];
                     if down_piece_r != usize::MAX {
-                        res += pieces_compatibility[1][piece_r * img_width + piece_c]
+                        res += pieces_dissimilarity[1][piece_r * img_width + piece_c]
                             [down_piece_r * img_width + down_piece_c];
                     }
                 }
@@ -340,7 +466,7 @@ fn chromosomes_crossover(
         let (selected_pos_r, selected_pos_c) = selected_pos;
         tmp_chromosome[selected_pos_r][selected_pos_c] = selected_piece;
         free_positions.retain(|x| *x != selected_pos);
-        free_pieces.retain(|x| *x != selected_piece);
+        free_pieces.remove(&selected_piece);
         min_r = min(min_r, selected_pos_r);
         max_r = max(max_r, selected_pos_r);
         min_c = min(min_c, selected_pos_c);
@@ -379,7 +505,8 @@ pub fn algorithm_step(
     img_width: usize,
     img_height: usize,
     image_generations_processed: usize,
-    pieces_compatibility: &[Vec<Vec<f32>>; 2],
+    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
+    pieces_buddies: &[Vec<(usize, usize)>; 4],
     current_generation: &[Chromosome],
 ) -> Vec<Chromosome> {
     // Создание нового поколения
@@ -400,7 +527,7 @@ pub fn algorithm_step(
         let curr_gen_dissimilarities: Vec<_> = current_generation
             .iter()
             .map(|chromosome| {
-                chromosome_dissimilarity(img_width, img_height, pieces_compatibility, chromosome)
+                chromosome_dissimilarity(img_width, img_height, pieces_dissimilarity, chromosome)
             })
             .collect();
         let max_dissimilarity = curr_gen_dissimilarities
@@ -436,7 +563,8 @@ pub fn algorithm_step(
                 chromosomes_crossover(
                     img_width,
                     img_height,
-                    pieces_compatibility,
+                    pieces_dissimilarity,
+                    pieces_buddies,
                     &current_generation[i],
                     &current_generation[j],
                     rng,
@@ -453,7 +581,7 @@ pub fn algorithm_step(
         FloatOrd(chromosome_dissimilarity(
             img_width,
             img_height,
-            pieces_compatibility,
+            pieces_dissimilarity,
             chromosome,
         ))
     });

@@ -6,7 +6,7 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::{
     app::AppMessage,
-    genetic_algorithm::{algorithm_step, calculate_compatibility, Chromosome},
+    genetic_algorithm::{algorithm_step, calculate_dissimilarities, find_best_buddies, Chromosome},
 };
 
 #[derive(Debug, Clone)]
@@ -20,7 +20,8 @@ pub struct AlgorithmDataRequest {
     pub images_processed: usize,
     pub image_generations_processed: usize,
     pub image_prepared: bool,
-    pub pieces_compatibility: Arc<[Vec<Vec<f32>>; 2]>,
+    pub pieces_dissimilarity: Arc<[Vec<Vec<f32>>; 2]>,
+    pub pieces_buddies: Arc<[Vec<(usize, usize)>; 4]>,
     pub current_generation: Arc<Vec<Chromosome>>,
 }
 
@@ -29,7 +30,8 @@ pub struct AlgorithmDataResponse {
     pub rng: Xoshiro256PlusPlus,
     pub images_processed: usize,
     pub image_generations_processed: usize,
-    pub pieces_compatibility: Option<[Vec<Vec<f32>>; 2]>,
+    pub pieces_dissimilarity: Option<[Vec<Vec<f32>>; 2]>,
+    pub pieces_buddies: Option<[Vec<(usize, usize)>; 4]>,
     pub current_generation: Option<Vec<Chromosome>>,
     pub best_chromosome: Option<Chromosome>,
 }
@@ -44,7 +46,8 @@ pub struct AlgorithmData {
     pub img_height: usize,
     pub images_processed: usize,
     pub image_generations_processed: usize,
-    pub pieces_compatibility: Arc<[Vec<Vec<f32>>; 2]>,
+    pub pieces_dissimilarity: Arc<[Vec<Vec<f32>>; 2]>,
+    pub pieces_buddies: Arc<[Vec<(usize, usize)>; 4]>,
     pub current_generation: Arc<Vec<Chromosome>>,
     pub best_chromosomes: Vec<Vec<Chromosome>>, // лучшая хромосома для каждого изображения и поколения
 }
@@ -60,8 +63,9 @@ impl AlgorithmData {
             img_height: self.img_height,
             images_processed: self.images_processed,
             image_generations_processed: self.image_generations_processed,
-            image_prepared: !self.pieces_compatibility[0].is_empty(),
-            pieces_compatibility: Arc::clone(&self.pieces_compatibility),
+            image_prepared: !self.pieces_dissimilarity[0].is_empty(),
+            pieces_dissimilarity: Arc::clone(&self.pieces_dissimilarity),
+            pieces_buddies: Arc::clone(&self.pieces_buddies),
             current_generation: Arc::clone(&self.current_generation),
         }
     }
@@ -76,7 +80,8 @@ impl AlgorithmData {
             img_height: request.img_height,
             images_processed: request.images_processed,
             image_generations_processed: request.image_generations_processed,
-            pieces_compatibility: request.pieces_compatibility,
+            pieces_dissimilarity: request.pieces_dissimilarity,
+            pieces_buddies: request.pieces_buddies,
             current_generation: request.current_generation,
             best_chromosomes: Vec::new(),
         }
@@ -86,8 +91,11 @@ impl AlgorithmData {
         self.rng = response.rng;
         self.images_processed = response.images_processed;
         self.image_generations_processed = response.image_generations_processed;
-        if let Some(pieces_compatibility) = response.pieces_compatibility {
-            self.pieces_compatibility = Arc::new(pieces_compatibility);
+        if let Some(pieces_compatibility) = response.pieces_dissimilarity {
+            self.pieces_dissimilarity = Arc::new(pieces_compatibility);
+        }
+        if let Some(pieces_buddies) = response.pieces_buddies {
+            self.pieces_buddies = Arc::new(pieces_buddies);
         }
         if let Some(generation) = response.current_generation {
             self.current_generation = Arc::new(generation);
@@ -147,7 +155,8 @@ pub fn algorithm_next(
                     rng: request.rng,
                     images_processed: request.images_processed,
                     image_generations_processed: request.image_generations_processed,
-                    pieces_compatibility: None,
+                    pieces_dissimilarity: None,
+                    pieces_buddies: None,
                     current_generation: None,
                     best_chromosome: None,
                 }));
@@ -158,23 +167,28 @@ pub fn algorithm_next(
                     rng: request.rng,
                     images_processed: request.images_processed + 1,
                     image_generations_processed: 0,
-                    pieces_compatibility: Some([Vec::new(), Vec::new()]),
+                    pieces_dissimilarity: Some([Vec::new(), Vec::new()]),
+                    pieces_buddies: Some([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
                     current_generation: None,
                     best_chromosome: None,
                 }));
             }
             // Подготовка - вычисление совместимостей деталей
+            let pieces_dissimilarity = calculate_dissimilarities(
+                &images[request.images_processed],
+                request.img_width,
+                request.img_height,
+                request.piece_size as usize,
+            );
+            let pieces_buddies =
+                find_best_buddies(request.img_width, request.img_height, &pieces_dissimilarity);
             if !request.image_prepared {
                 return Ok(AlgorithmMessage::Update(AlgorithmDataResponse {
                     rng: request.rng,
                     images_processed: request.images_processed,
                     image_generations_processed: request.image_generations_processed,
-                    pieces_compatibility: Some(calculate_compatibility(
-                        &images[request.images_processed],
-                        request.img_width,
-                        request.img_height,
-                        request.piece_size as usize,
-                    )),
+                    pieces_dissimilarity: Some(pieces_dissimilarity),
+                    pieces_buddies: Some(pieces_buddies),
                     current_generation: None,
                     best_chromosome: None,
                 }));
@@ -186,7 +200,8 @@ pub fn algorithm_next(
                 request.img_width,
                 request.img_height,
                 request.image_generations_processed,
-                &request.pieces_compatibility,
+                &request.pieces_dissimilarity,
+                &request.pieces_buddies,
                 &request.current_generation,
             );
 
@@ -194,7 +209,8 @@ pub fn algorithm_next(
                 rng: request.rng,
                 images_processed: request.images_processed,
                 image_generations_processed: request.image_generations_processed + 1,
-                pieces_compatibility: None,
+                pieces_dissimilarity: None,
+                pieces_buddies: None,
                 best_chromosome: Some(new_generation[0].clone()),
                 current_generation: Some(new_generation),
             }))

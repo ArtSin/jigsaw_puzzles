@@ -135,7 +135,8 @@ impl AppState {
             images_processed: 0,
             image_generations_processed: 0,
             image_prepared: false,
-            pieces_compatibility: Arc::new([Vec::new(), Vec::new()]),
+            pieces_dissimilarity: Arc::new([Vec::new(), Vec::new()]),
+            pieces_buddies: Arc::new([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
             current_generation: Arc::new(Vec::new()),
         };
 
