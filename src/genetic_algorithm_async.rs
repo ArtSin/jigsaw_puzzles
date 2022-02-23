@@ -181,8 +181,7 @@ pub fn algorithm_next(
                     request.img_height,
                     request.piece_size as usize,
                 );
-                let pieces_buddies =
-                    find_best_buddies(request.img_width, request.img_height, &pieces_dissimilarity);
+                let pieces_buddies = find_best_buddies(request.img_width, &pieces_dissimilarity);
                 return Ok(AlgorithmMessage::Update(AlgorithmDataResponse {
                     rng: request.rng,
                     images_processed: request.images_processed,

@@ -81,7 +81,6 @@ pub fn calculate_dissimilarities(
 
 pub fn find_best_buddies(
     img_width: usize,
-    img_height: usize,
     pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
 ) -> [Vec<(usize, usize)>; 4] {
     let get_buddies = |ind: usize| {
