@@ -54,4 +54,11 @@ pub fn get_lab_image(image: &RgbaImage) -> Vec<Lab> {
         .filter_map(|(i, x)| if i % 4 != 0 { Some(x) } else { None })
         .collect();
     lab::rgb_bytes_to_labs(&rgb_pixels)
+        .into_iter()
+        .map(|Lab { l, a, b }| Lab {
+            l: (l - 30.0) / (100.0 - 30.0),
+            a: (a + 40.0) / (90.0 + 40.0),
+            b: (b + 110.0) / 110.0,
+        })
+        .collect()
 }
