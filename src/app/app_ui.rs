@@ -24,6 +24,8 @@ pub struct AppUIState {
     pub main_image_selected_image: Option<usize>,
     pub main_image_selected_generation: Option<usize>,
     pub main_image_handle: Option<iced::image::Handle>,
+    pub main_image_direct_comparison: f32,
+    pub main_image_neighbour_comparison: f32,
     prev_generation_button: button::State,
     next_generation_button: button::State,
 
@@ -95,6 +97,7 @@ impl Application for AppState {
             }
         );
 
+        // Меню (слева)
         let menu_column = Column::new()
             .width(Length::FillPortion(1))
             .padding(5)
@@ -177,6 +180,7 @@ impl Application for AppState {
             })
             .push(Text::new(status_text));
 
+        // Изображение поколения и информация о нём (центр)
         let mut main_image_column = Column::new()
             .width(Length::FillPortion(3))
             .padding(5)
@@ -208,6 +212,7 @@ impl Application for AppState {
                             .max_height(40)
                             .padding(5)
                             .spacing(10)
+                            .push(Space::new(Length::Fill, Length::Shrink))
                             .push({
                                 let button = Button::new(
                                     &mut self.ui.prev_generation_button,
@@ -250,7 +255,20 @@ impl Application for AppState {
                                 } else {
                                     button
                                 }
-                            }),
+                            })
+                            .push(Space::new(Length::Fill, Length::Shrink))
+                            .push(
+                                Container::new(
+                                    Text::new(format!(
+                                        "Прямое сравнение: {:.2}%\nСравнение по соседям: {:.2}%",
+                                        self.ui.main_image_direct_comparison,
+                                        self.ui.main_image_neighbour_comparison
+                                    ))
+                                    .vertical_alignment(VerticalAlignment::Center),
+                                )
+                                .height(Length::Fill)
+                                .center_y(),
+                            ),
                     )
                     .width(Length::Fill)
                     .center_x(),

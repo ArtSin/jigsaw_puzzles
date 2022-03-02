@@ -55,3 +55,59 @@ pub fn get_lab_image(image: &RgbaImage) -> Vec<Lab> {
         .collect();
     lab::rgb_bytes_to_labs(&rgb_pixels)
 }
+
+pub fn image_direct_comparison(chromosome: &Chromosome) -> f32 {
+    (chromosome
+        .iter()
+        .enumerate()
+        .map(|(r, v)| {
+            v.iter()
+                .enumerate()
+                .filter(|(c, ij)| (r, *c) == **ij)
+                .count()
+        })
+        .sum::<usize>() as f32)
+        * 100.0
+        / ((chromosome.len() * chromosome[0].len()) as f32)
+}
+
+pub fn image_neighbour_comparison(chromosome: &Chromosome) -> f32 {
+    let (img_height, img_width) = (chromosome.len(), chromosome[0].len());
+    (0..img_height)
+        .map(|r| {
+            (0..img_width)
+                .map(|c| {
+                    let (mut res, mut count) = (0usize, 0usize);
+                    let (i, j) = chromosome[r][c];
+                    for (dr, dc) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                        let (new_r, new_c) = ((r as isize) + dr, (c as isize) + dc);
+                        if new_r < 0 || new_c < 0 {
+                            continue;
+                        }
+                        let (new_r, new_c) = (new_r as usize, new_c as usize);
+                        if new_r >= img_height || new_c >= img_width {
+                            continue;
+                        }
+                        count += 1;
+
+                        let (new_i, new_j) = ((i as isize) + dr, (j as isize) + dc);
+                        if new_i < 0 || new_j < 0 {
+                            continue;
+                        }
+                        let (new_i, new_j) = (new_i as usize, new_j as usize);
+                        if new_i >= img_height || new_j >= img_width {
+                            continue;
+                        }
+
+                        if chromosome[new_r][new_c] == (new_i, new_j) {
+                            res += 1;
+                        }
+                    }
+                    (res as f32) / (count as f32)
+                })
+                .sum::<f32>()
+        })
+        .sum::<f32>()
+        * 100.0
+        / ((img_width * img_height) as f32)
+}

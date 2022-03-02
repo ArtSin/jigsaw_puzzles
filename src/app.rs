@@ -17,7 +17,9 @@ use crate::{
         algorithm_next, AlgorithmData, AlgorithmDataRequest, AlgorithmError, AlgorithmMessage,
         AlgorithmState,
     },
-    image_processing::{get_chromosome_image, get_image_handle},
+    image_processing::{
+        get_chromosome_image, get_image_handle, image_direct_comparison, image_neighbour_comparison,
+    },
 };
 
 mod app_ui;
@@ -163,6 +165,10 @@ impl AppState {
                     &algorithm_data.best_chromosomes[image_i][gen],
                 );
                 self.ui.main_image_handle = Some(get_image_handle(&new_image));
+                self.ui.main_image_direct_comparison =
+                    image_direct_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
+                self.ui.main_image_neighbour_comparison =
+                    image_neighbour_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
                 Ok(Command::none())
             }
             _ => unreachable!(),

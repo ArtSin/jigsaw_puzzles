@@ -12,7 +12,8 @@ use crate::image_processing::get_lab_image;
 pub type Chromosome = Vec<Vec<(usize, usize)>>;
 
 const ELITISM_COUNT: usize = 4;
-const MUTATION_RATE: f32 = 0.005;
+const MUTATION_RATE_1: f32 = 0.005;
+const MUTATION_RATE_2: f32 = 0.005;
 
 // Вычисление совместимостей деталей
 pub fn calculate_dissimilarities(
@@ -340,7 +341,7 @@ fn chromosomes_crossover(
                 let ind = rng.gen_range(0..free_positions_phase_1.len());
                 let (pos, mut piece) = free_positions_phase_1.get_index(ind).unwrap();
 
-                if rng.gen_range(0.0f32..1.0) <= MUTATION_RATE {
+                if rng.gen_range(0.0f32..1.0) <= MUTATION_RATE_1 {
                     let ind = rng.gen_range(0..free_pieces.len());
                     piece = free_pieces.get_index(ind).unwrap();
                 }
@@ -478,7 +479,7 @@ fn chromosomes_crossover(
 
             let mut best_piece = (usize::MAX, usize::MAX);
             let mut best_dissimilarity = f32::INFINITY;
-            if rng.gen_range(0.0f32..1.0) <= MUTATION_RATE {
+            if rng.gen_range(0.0f32..1.0) <= MUTATION_RATE_2 {
                 let ind = rng.gen_range(0..free_pieces.len());
                 best_piece = *free_pieces.get_index(ind).unwrap();
             } else {
