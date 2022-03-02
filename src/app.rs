@@ -43,8 +43,10 @@ pub struct AppState {
 pub enum AppMessage {
     LoadImagesPressed,
     StartAlgorithmPressed,
+    FirstGenerationPressed,
     PrevGenerationPressed,
     NextGenerationPressed,
+    LastGenerationPressed,
     ImagesButtonPressed(usize),
 
     PieceSizeChanged(u32),
@@ -182,6 +184,10 @@ impl AppState {
         match message {
             AppMessage::LoadImagesPressed => self.load_images_start(),
             AppMessage::StartAlgorithmPressed => self.algorithm_start(),
+            AppMessage::FirstGenerationPressed => {
+                self.ui.main_image_selected_generation = Some(0);
+                self.load_selected_image()
+            }
             AppMessage::PrevGenerationPressed => {
                 self.ui.main_image_selected_generation =
                     Some(self.ui.main_image_selected_generation.unwrap() - 1);
@@ -190,6 +196,10 @@ impl AppState {
             AppMessage::NextGenerationPressed => {
                 self.ui.main_image_selected_generation =
                     Some(self.ui.main_image_selected_generation.unwrap() + 1);
+                self.load_selected_image()
+            }
+            AppMessage::LastGenerationPressed => {
+                self.ui.main_image_selected_generation = Some(self.generations_count - 1);
                 self.load_selected_image()
             }
             AppMessage::ImagesButtonPressed(image_i) => {

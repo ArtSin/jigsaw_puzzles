@@ -26,8 +26,10 @@ pub struct AppUIState {
     pub main_image_handle: Option<iced::image::Handle>,
     pub main_image_direct_comparison: f32,
     pub main_image_neighbour_comparison: f32,
+    first_generation_button: button::State,
     prev_generation_button: button::State,
     next_generation_button: button::State,
+    last_generation_button: button::State,
 
     pub images_buttons: Vec<button::State>,
     images_scrollable: scrollable::State,
@@ -215,6 +217,21 @@ impl Application for AppState {
                             .push(Space::new(Length::Fill, Length::Shrink))
                             .push({
                                 let button = Button::new(
+                                    &mut self.ui.first_generation_button,
+                                    Container::new(Text::new("<<"))
+                                        .width(Length::Fill)
+                                        .height(Length::Fill)
+                                        .center_x()
+                                        .center_y(),
+                                );
+                                if self.ui.main_image_selected_generation.unwrap() > 0 {
+                                    button.on_press(AppMessage::FirstGenerationPressed)
+                                } else {
+                                    button
+                                }
+                            })
+                            .push({
+                                let button = Button::new(
                                     &mut self.ui.prev_generation_button,
                                     Container::new(Text::new("<"))
                                         .width(Length::Fill)
@@ -252,6 +269,21 @@ impl Application for AppState {
                                 );
                                 if self.ui.main_image_selected_generation.unwrap() + 1 < gen_cnt {
                                     button.on_press(AppMessage::NextGenerationPressed)
+                                } else {
+                                    button
+                                }
+                            })
+                            .push({
+                                let button = Button::new(
+                                    &mut self.ui.last_generation_button,
+                                    Container::new(Text::new(">>"))
+                                        .width(Length::Fill)
+                                        .height(Length::Fill)
+                                        .center_x()
+                                        .center_y(),
+                                );
+                                if self.ui.main_image_selected_generation.unwrap() + 1 < gen_cnt {
+                                    button.on_press(AppMessage::LastGenerationPressed)
                                 } else {
                                     button
                                 }
