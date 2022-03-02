@@ -1,5 +1,5 @@
 use iced::image::Handle;
-use image::{GenericImage, GenericImageView, ImageBuffer, RgbaImage};
+use image::{GenericImage, GenericImageView, ImageBuffer, Pixel, RgbaImage};
 use lab::Lab;
 
 use crate::genetic_algorithm::Chromosome;
@@ -47,11 +47,15 @@ pub fn get_chromosome_image(
 
 pub fn get_lab_image(image: &RgbaImage) -> Vec<Lab> {
     let rgb_pixels: Vec<_> = image
-        .as_raw()
-        .clone()
-        .into_iter()
-        .enumerate()
-        .filter_map(|(i, x)| if i % 4 != 0 { Some(x) } else { None })
+        .pixels()
+        .flat_map(|rgba_pixel| {
+            rgba_pixel
+                .to_rgb()
+                .channels()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        })
         .collect();
     lab::rgb_bytes_to_labs(&rgb_pixels)
 }
