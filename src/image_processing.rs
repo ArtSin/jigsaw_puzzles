@@ -48,14 +48,7 @@ pub fn get_chromosome_image(
 pub fn get_lab_image(image: &RgbaImage) -> Vec<Lab> {
     let rgb_pixels: Vec<_> = image
         .pixels()
-        .flat_map(|rgba_pixel| {
-            rgba_pixel
-                .to_rgb()
-                .channels()
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>()
-        })
+        .flat_map(|rgba_pixel| rgba_pixel.to_rgb().channels().to_vec())
         .collect();
     lab::rgb_bytes_to_labs(&rgb_pixels)
 }

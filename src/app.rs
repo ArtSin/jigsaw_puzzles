@@ -1,4 +1,4 @@
-use std::{error::Error, mem::swap, sync::Arc, time::Instant};
+use std::{error::Error, fs::File, io::BufWriter, io::Write, mem::swap, sync::Arc, time::Instant};
 
 use iced::{button, Command};
 use native_dialog::FileDialog;
@@ -43,6 +43,7 @@ pub struct AppState {
 pub enum AppMessage {
     LoadImagesPressed,
     StartAlgorithmPressed,
+    SaveResultsPressed,
     FirstGenerationPressed,
     PrevGenerationPressed,
     NextGenerationPressed,
@@ -98,6 +99,57 @@ impl AppState {
                 dir_path_option.as_ref().unwrap().clone(),
             ))
         }))
+    }
+
+    pub fn save_results(&self) -> Result<Command<AppMessage>, Box<dyn Error>> {
+        let images_data = match &self.load_images_state {
+            LoadImagesState::Loaded(images_data) => images_data,
+            _ => unreachable!(),
+        };
+        let algorithm_data = match &self.algorithm_state {
+            AlgorithmState::Finished(algorithm_data) => algorithm_data,
+            _ => unreachable!(),
+        };
+
+        let file_path_option = FileDialog::new().show_save_single_file()?;
+        if file_path_option.is_none() {
+            return Ok(Command::none());
+        }
+        let mut writer = BufWriter::new(File::create(file_path_option.unwrap())?);
+
+        for image_name in &images_data.images_names {
+            write!(writer, "direct_{},", image_name)?;
+        }
+        for (image_i, image_name) in images_data.images_names.iter().enumerate() {
+            write!(writer, "neighbour_{}", image_name)?;
+            if image_i != images_data.loaded - 1 {
+                write!(writer, ",")?;
+            }
+        }
+        writeln!(writer)?;
+
+        for gen in 0..algorithm_data.generations_count {
+            for image_i in 0..algorithm_data.images_processed {
+                write!(
+                    writer,
+                    "{:.2},",
+                    image_direct_comparison(&algorithm_data.best_chromosomes[image_i][gen])
+                )?;
+            }
+            for image_i in 0..algorithm_data.images_processed {
+                write!(
+                    writer,
+                    "{:.2}",
+                    image_neighbour_comparison(&algorithm_data.best_chromosomes[image_i][gen])
+                )?;
+                if image_i != images_data.loaded - 1 {
+                    write!(writer, ",")?;
+                }
+            }
+            writeln!(writer)?;
+        }
+
+        Ok(Command::none())
     }
 
     pub fn algorithm_start(&self) -> Result<Command<AppMessage>, Box<dyn Error>> {
@@ -184,6 +236,7 @@ impl AppState {
         match message {
             AppMessage::LoadImagesPressed => self.load_images_start(),
             AppMessage::StartAlgorithmPressed => self.algorithm_start(),
+            AppMessage::SaveResultsPressed => self.save_results(),
             AppMessage::FirstGenerationPressed => {
                 self.ui.main_image_selected_generation = Some(0);
                 self.load_selected_image()

@@ -13,7 +13,7 @@ pub type Chromosome = Vec<Vec<(usize, usize)>>;
 
 const ELITISM_COUNT: usize = 4;
 const MUTATION_RATE_1: f32 = 0.005;
-const MUTATION_RATE_2: f32 = 0.005;
+const MUTATION_RATE_3: f32 = 0.005;
 
 // Вычисление совместимостей деталей
 pub fn calculate_dissimilarities(
@@ -478,49 +478,84 @@ fn chromosomes_crossover(
             let (pos_r, pos_c) = *free_positions_unknown.get_index(ind).unwrap();
 
             let mut best_piece = (usize::MAX, usize::MAX);
-            let mut best_dissimilarity = f32::INFINITY;
-            if rng.gen_range(0.0f32..1.0) <= MUTATION_RATE_2 {
+            if rng.gen_range(0.0f32..1.0) <= MUTATION_RATE_3 {
                 let ind = rng.gen_range(0..free_pieces.len());
                 best_piece = *free_pieces.get_index(ind).unwrap();
             } else {
-                for (piece_r, piece_c) in &free_pieces {
+                let (left_piece_r, left_piece_c) = if pos_c == 0 {
+                    (usize::MAX, usize::MAX)
+                } else {
+                    new_chromosome[pos_r][pos_c - 1]
+                };
+                let (right_piece_r, right_piece_c) = if pos_c == 2 * img_width - 1 {
+                    (usize::MAX, usize::MAX)
+                } else {
+                    new_chromosome[pos_r][pos_c + 1]
+                };
+                let (up_piece_r, up_piece_c) = if pos_r == 0 {
+                    (usize::MAX, usize::MAX)
+                } else {
+                    new_chromosome[pos_r - 1][pos_c]
+                };
+                let (down_piece_r, down_piece_c) = if pos_r == 2 * img_height - 1 {
+                    (usize::MAX, usize::MAX)
+                } else {
+                    new_chromosome[pos_r + 1][pos_c]
+                };
+
+                let mut best_dissimilarity = f32::INFINITY;
+                let mut buddies = Vec::new();
+                if left_piece_r != usize::MAX {
+                    buddies.push(pieces_buddies[0][left_piece_r * img_width + left_piece_c]);
+                }
+                if right_piece_r != usize::MAX {
+                    buddies.push(pieces_buddies[2][right_piece_r * img_width + right_piece_c]);
+                }
+                if up_piece_r != usize::MAX {
+                    buddies.push(pieces_buddies[1][up_piece_r * img_width + up_piece_c]);
+                }
+                if down_piece_r != usize::MAX {
+                    buddies.push(pieces_buddies[3][down_piece_r * img_width + down_piece_c]);
+                }
+                let buddies = buddies.iter().filter(|piece| free_pieces.contains(*piece));
+
+                for (piece_r, piece_c) in buddies.chain(free_pieces.iter()) {
                     let mut res = 0.0f32;
                     // Деталь слева
-                    if pos_c != 0 {
-                        let (left_piece_r, left_piece_c) = new_chromosome[pos_r][pos_c - 1];
-                        if left_piece_r != usize::MAX {
-                            res += pieces_dissimilarity[0][left_piece_r * img_width + left_piece_c]
-                                [piece_r * img_width + piece_c];
+                    if left_piece_r != usize::MAX {
+                        res += pieces_dissimilarity[0][left_piece_r * img_width + left_piece_c]
+                            [piece_r * img_width + piece_c];
+                        if res >= best_dissimilarity {
+                            continue;
                         }
                     }
                     // Деталь справа
-                    if pos_c != 2 * img_width - 1 {
-                        let (right_piece_r, right_piece_c) = new_chromosome[pos_r][pos_c + 1];
-                        if right_piece_r != usize::MAX {
-                            res += pieces_dissimilarity[0][piece_r * img_width + piece_c]
-                                [right_piece_r * img_width + right_piece_c];
+                    if right_piece_r != usize::MAX {
+                        res += pieces_dissimilarity[0][piece_r * img_width + piece_c]
+                            [right_piece_r * img_width + right_piece_c];
+                        if res >= best_dissimilarity {
+                            continue;
                         }
                     }
                     // Деталь сверху
-                    if pos_r != 0 {
-                        let (up_piece_r, up_piece_c) = new_chromosome[pos_r - 1][pos_c];
-                        if up_piece_r != usize::MAX {
-                            res += pieces_dissimilarity[1][up_piece_r * img_width + up_piece_c]
-                                [piece_r * img_width + piece_c];
+                    if up_piece_r != usize::MAX {
+                        res += pieces_dissimilarity[1][up_piece_r * img_width + up_piece_c]
+                            [piece_r * img_width + piece_c];
+                        if res >= best_dissimilarity {
+                            continue;
                         }
                     }
                     // Деталь снизу
-                    if pos_r != 2 * img_height - 1 {
-                        let (down_piece_r, down_piece_c) = new_chromosome[pos_r + 1][pos_c];
-                        if down_piece_r != usize::MAX {
-                            res += pieces_dissimilarity[1][piece_r * img_width + piece_c]
-                                [down_piece_r * img_width + down_piece_c];
+                    if down_piece_r != usize::MAX {
+                        res += pieces_dissimilarity[1][piece_r * img_width + piece_c]
+                            [down_piece_r * img_width + down_piece_c];
+                        if res >= best_dissimilarity {
+                            continue;
                         }
                     }
-                    if res < best_dissimilarity {
-                        best_piece = (*piece_r, *piece_c);
-                        best_dissimilarity = res;
-                    }
+
+                    best_piece = (*piece_r, *piece_c);
+                    best_dissimilarity = res;
                 }
             }
 

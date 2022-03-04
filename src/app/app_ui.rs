@@ -20,6 +20,7 @@ pub struct AppUIState {
     population_size_number_input: number_input::State,
     rand_seed_number_input: number_input::State,
     start_algorithm_button: button::State,
+    save_results_button: button::State,
 
     pub main_image_selected_image: Option<usize>,
     pub main_image_selected_generation: Option<usize>,
@@ -81,16 +82,20 @@ impl Application for AppState {
                     LoadImagesState::NotLoaded => String::from("изображения не загружены"),
                     LoadImagesState::Preparing => String::from("подготовка..."),
                     LoadImagesState::Loading(data) => {
-                        format!("загрузка изображения {}/{}", data.loaded, data.paths.len())
+                        format!(
+                            "загрузка изображения {}/{}",
+                            data.loaded + 1,
+                            data.paths.len()
+                        )
                     }
                     LoadImagesState::Loaded(_) => String::from("изображения загружены"),
                 },
                 AlgorithmState::Running(algorithm_data) => match &self.load_images_state {
                     LoadImagesState::Loaded(images_data) => format!(
                         "обработка изображения {}/{}, поколение {}/{}",
-                        algorithm_data.images_processed,
+                        algorithm_data.images_processed + 1,
                         images_data.images.len(),
-                        algorithm_data.image_generations_processed,
+                        algorithm_data.image_generations_processed + 1,
                         self.generations_count
                     ),
                     _ => unreachable!(),
@@ -177,6 +182,23 @@ impl Application for AppState {
                         LoadImagesState::Loaded(_),
                         AlgorithmState::NotStarted | AlgorithmState::Finished(_),
                     ) => button.on_press(AppMessage::StartAlgorithmPressed),
+                    _ => button,
+                }
+            })
+            .push({
+                let button = Button::new(
+                    &mut self.ui.save_results_button,
+                    Container::new(Text::new("Сохранить результаты"))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center_x()
+                        .center_y(),
+                )
+                .width(Length::Fill);
+                match (&self.load_images_state, &self.algorithm_state) {
+                    (LoadImagesState::Loaded(_), AlgorithmState::Finished(_)) => {
+                        button.on_press(AppMessage::SaveResultsPressed)
+                    }
                     _ => button,
                 }
             })
