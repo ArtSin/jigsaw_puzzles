@@ -327,14 +327,7 @@ fn chromosomes_crossover(
                 } else {
                     piece_to_pos_phase_1.insert(piece, vec![pos]);
                 }
-                if let Some(old_piece) = free_positions_phase_1.insert(pos, piece) {
-                    if let Some(v) = piece_to_pos_phase_1.get_mut(&old_piece) {
-                        v.retain(|x| *x != pos);
-                        if v.is_empty() {
-                            piece_to_pos_phase_1.remove(&old_piece);
-                        }
-                    }
-                }
+                assert!(free_positions_phase_1.insert(pos, piece).is_none());
             }
 
             if !free_positions_phase_1.is_empty() {
@@ -452,14 +445,7 @@ fn chromosomes_crossover(
                 } else {
                     piece_to_pos_phase_2.insert(piece, vec![pos]);
                 }
-                if let Some(old_piece) = free_positions_phase_2.insert(pos, piece) {
-                    if let Some(v) = piece_to_pos_phase_2.get_mut(&old_piece) {
-                        v.retain(|x| *x != pos);
-                        if v.is_empty() {
-                            piece_to_pos_phase_2.remove(&old_piece);
-                        }
-                    }
-                }
+                assert!(free_positions_phase_2.insert(pos, piece).is_none());
             }
 
             if !free_positions_phase_2.is_empty() {
