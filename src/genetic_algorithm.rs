@@ -270,100 +270,89 @@ fn chromosomes_crossover(
         // Фаза 1 (у обоих предков одинаковая деталь в определённом направлении от позиции)
         if selected_pos.is_none() {
             // Обработка нерассмотренных свободных позиций
-            let tmp: Vec<_> = free_positions_unknown
-                .iter()
-                .map(|(pos_r, pos_c)| {
-                    assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
+            let tmp = free_positions_unknown.iter().map(|(pos_r, pos_c)| {
+                assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
 
-                    // Обработка детали слева
-                    if *pos_c != 0 {
-                        // Деталь слева в новой хромосоме
-                        let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
-                        if left_piece_r != usize::MAX {
-                            // Положение этой детали в предках
-                            let (pos_1_r, pos_1_c) =
-                                pos_in_chromosome_1[left_piece_r][left_piece_c];
-                            let (pos_2_r, pos_2_c) =
-                                pos_in_chromosome_2[left_piece_r][left_piece_c];
-                            // Если справа от левой детали в обоих предках одна и та же свободная деталь, то выбираем её
-                            if pos_1_c != img_width - 1
-                                && pos_2_c != img_width - 1
-                                && chromosome_1[pos_1_r][pos_1_c + 1]
-                                    == chromosome_2[pos_2_r][pos_2_c + 1]
-                                && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c + 1])
-                            {
-                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c + 1]));
-                            }
+                // Обработка детали слева
+                if *pos_c != 0 {
+                    // Деталь слева в новой хромосоме
+                    let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
+                    if left_piece_r != usize::MAX {
+                        // Положение этой детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[left_piece_r][left_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[left_piece_r][left_piece_c];
+                        // Если справа от левой детали в обоих предках одна и та же свободная деталь, то выбираем её
+                        if pos_1_c != img_width - 1
+                            && pos_2_c != img_width - 1
+                            && chromosome_1[pos_1_r][pos_1_c + 1]
+                                == chromosome_2[pos_2_r][pos_2_c + 1]
+                            && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c + 1])
+                        {
+                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c + 1]));
                         }
                     }
-                    // Обработка детали справа
-                    if *pos_c != 2 * img_width - 1 {
-                        // Деталь справа в новой хромосоме
-                        let (right_piece_r, right_piece_c) = new_chromosome[*pos_r][*pos_c + 1];
-                        if right_piece_r != usize::MAX {
-                            // Положение этой детали в предках
-                            let (pos_1_r, pos_1_c) =
-                                pos_in_chromosome_1[right_piece_r][right_piece_c];
-                            let (pos_2_r, pos_2_c) =
-                                pos_in_chromosome_2[right_piece_r][right_piece_c];
-                            // Если слева от правой детали в обоих предках одна и та же свободная деталь, то выбираем её
-                            if pos_1_c != 0
-                                && pos_2_c != 0
-                                && chromosome_1[pos_1_r][pos_1_c - 1]
-                                    == chromosome_2[pos_2_r][pos_2_c - 1]
-                                && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c - 1])
-                            {
-                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c - 1]));
-                            }
+                }
+                // Обработка детали справа
+                if *pos_c != 2 * img_width - 1 {
+                    // Деталь справа в новой хромосоме
+                    let (right_piece_r, right_piece_c) = new_chromosome[*pos_r][*pos_c + 1];
+                    if right_piece_r != usize::MAX {
+                        // Положение этой детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[right_piece_r][right_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[right_piece_r][right_piece_c];
+                        // Если слева от правой детали в обоих предках одна и та же свободная деталь, то выбираем её
+                        if pos_1_c != 0
+                            && pos_2_c != 0
+                            && chromosome_1[pos_1_r][pos_1_c - 1]
+                                == chromosome_2[pos_2_r][pos_2_c - 1]
+                            && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c - 1])
+                        {
+                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c - 1]));
                         }
                     }
-                    // Обработка детали сверху
-                    if *pos_r != 0 {
-                        // Деталь сверху в новой хромосоме
-                        let (up_piece_r, up_piece_c) = new_chromosome[*pos_r - 1][*pos_c];
-                        if up_piece_r != usize::MAX {
-                            // Положение этой детали в предках
-                            let (pos_1_r, pos_1_c) = pos_in_chromosome_1[up_piece_r][up_piece_c];
-                            let (pos_2_r, pos_2_c) = pos_in_chromosome_2[up_piece_r][up_piece_c];
-                            // Если снизу от верхней детали в обоих предках одна и та же свободная деталь, то выбираем её
-                            if pos_1_r != img_height - 1
-                                && pos_2_r != img_height - 1
-                                && chromosome_1[pos_1_r + 1][pos_1_c]
-                                    == chromosome_2[pos_2_r + 1][pos_2_c]
-                                && free_pieces.contains(&chromosome_1[pos_1_r + 1][pos_1_c])
-                            {
-                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r + 1][pos_1_c]));
-                            }
+                }
+                // Обработка детали сверху
+                if *pos_r != 0 {
+                    // Деталь сверху в новой хромосоме
+                    let (up_piece_r, up_piece_c) = new_chromosome[*pos_r - 1][*pos_c];
+                    if up_piece_r != usize::MAX {
+                        // Положение этой детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[up_piece_r][up_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[up_piece_r][up_piece_c];
+                        // Если снизу от верхней детали в обоих предках одна и та же свободная деталь, то выбираем её
+                        if pos_1_r != img_height - 1
+                            && pos_2_r != img_height - 1
+                            && chromosome_1[pos_1_r + 1][pos_1_c]
+                                == chromosome_2[pos_2_r + 1][pos_2_c]
+                            && free_pieces.contains(&chromosome_1[pos_1_r + 1][pos_1_c])
+                        {
+                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r + 1][pos_1_c]));
                         }
                     }
-                    // Обработка детали снизу
-                    if *pos_r != 2 * img_height - 1 {
-                        // Деталь снизу в новой хромосоме
-                        let (down_piece_r, down_piece_c) = new_chromosome[*pos_r + 1][*pos_c];
-                        if down_piece_r != usize::MAX {
-                            // Положение этой детали в предках
-                            let (pos_1_r, pos_1_c) =
-                                pos_in_chromosome_1[down_piece_r][down_piece_c];
-                            let (pos_2_r, pos_2_c) =
-                                pos_in_chromosome_2[down_piece_r][down_piece_c];
-                            // Если сверху от нижней детали в обоих предках одна и та же свободная деталь, то выбираем её
-                            if pos_1_r != 0
-                                && pos_2_r != 0
-                                && chromosome_1[pos_1_r - 1][pos_1_c]
-                                    == chromosome_2[pos_2_r - 1][pos_2_c]
-                                && free_pieces.contains(&chromosome_1[pos_1_r - 1][pos_1_c])
-                            {
-                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r - 1][pos_1_c]));
-                            }
+                }
+                // Обработка детали снизу
+                if *pos_r != 2 * img_height - 1 {
+                    // Деталь снизу в новой хромосоме
+                    let (down_piece_r, down_piece_c) = new_chromosome[*pos_r + 1][*pos_c];
+                    if down_piece_r != usize::MAX {
+                        // Положение этой детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[down_piece_r][down_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[down_piece_r][down_piece_c];
+                        // Если сверху от нижней детали в обоих предках одна и та же свободная деталь, то выбираем её
+                        if pos_1_r != 0
+                            && pos_2_r != 0
+                            && chromosome_1[pos_1_r - 1][pos_1_c]
+                                == chromosome_2[pos_2_r - 1][pos_2_c]
+                            && free_pieces.contains(&chromosome_1[pos_1_r - 1][pos_1_c])
+                        {
+                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r - 1][pos_1_c]));
                         }
                     }
-                    // Позиция не подходит для фазы 1
-                    Err((*pos_r, *pos_c))
-                })
-                .collect();
+                }
+                // Позиция не подходит для фазы 1
+                Err((*pos_r, *pos_c))
+            });
 
-            // Нерассмотренных позиций нет
-            free_positions_unknown.clear();
             for res in tmp {
                 match res {
                     // Если позиция подходит для фазы 1, то добавление её
@@ -384,6 +373,8 @@ fn chromosomes_crossover(
                     }
                 }
             }
+            // Нерассмотренных позиций нет
+            free_positions_unknown.clear();
 
             // Если есть хотя бы одна подходящая позиция
             if !free_positions_phase_1.is_empty() {
@@ -408,127 +399,112 @@ fn chromosomes_crossover(
         // Фаза 2 (две детали являются "лучшими приятелями" друг друга)
         if selected_pos.is_none() {
             // Обработка свободных позиций, не подходящих для фазы 1
-            let tmp: Vec<_> = free_positions_not_in_phase_1
-                .iter()
-                .map(|(pos_r, pos_c)| {
-                    assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
+            let tmp = free_positions_not_in_phase_1.iter().map(|(pos_r, pos_c)| {
+                assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
 
-                    // Обработка детали слева
-                    if *pos_c != 0 {
-                        // Деталь слева в новой хромосоме
-                        let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
-                        if left_piece_r != usize::MAX {
-                            // "Лучший приятель" этой детали
-                            let best_buddy =
-                                pieces_buddies[0][left_piece_r * img_width + left_piece_c];
-                            // Положение левой детали в предках
-                            let (pos_1_r, pos_1_c) =
-                                pos_in_chromosome_1[left_piece_r][left_piece_c];
-                            let (pos_2_r, pos_2_c) =
-                                pos_in_chromosome_2[left_piece_r][left_piece_c];
-                            // Если найденный "лучший приятель" также считает левую деталь "лучшим приятелем",
-                            // и справа от левой детали хотя бы в одном из предков есть этот "лучший приятель",
-                            // и он свободен, то выбираем его
-                            if pieces_buddies[2][best_buddy.0 * img_width + best_buddy.1]
-                                == (left_piece_r, left_piece_c)
-                                && ((pos_1_c != img_width - 1
-                                    && chromosome_1[pos_1_r][pos_1_c + 1] == best_buddy)
-                                    || (pos_2_c != img_width - 1
-                                        && chromosome_2[pos_2_r][pos_2_c + 1] == best_buddy))
-                                && free_pieces.contains(&best_buddy)
-                            {
-                                return Ok(((*pos_r, *pos_c), best_buddy));
-                            }
+                // Обработка детали слева
+                if *pos_c != 0 {
+                    // Деталь слева в новой хромосоме
+                    let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
+                    if left_piece_r != usize::MAX {
+                        // "Лучший приятель" этой детали
+                        let best_buddy = pieces_buddies[0][left_piece_r * img_width + left_piece_c];
+                        // Положение левой детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[left_piece_r][left_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[left_piece_r][left_piece_c];
+                        // Если найденный "лучший приятель" также считает левую деталь "лучшим приятелем",
+                        // и справа от левой детали хотя бы в одном из предков есть этот "лучший приятель",
+                        // и он свободен, то выбираем его
+                        if pieces_buddies[2][best_buddy.0 * img_width + best_buddy.1]
+                            == (left_piece_r, left_piece_c)
+                            && ((pos_1_c != img_width - 1
+                                && chromosome_1[pos_1_r][pos_1_c + 1] == best_buddy)
+                                || (pos_2_c != img_width - 1
+                                    && chromosome_2[pos_2_r][pos_2_c + 1] == best_buddy))
+                            && free_pieces.contains(&best_buddy)
+                        {
+                            return Ok(((*pos_r, *pos_c), best_buddy));
                         }
                     }
-                    // Обработка детали справа
-                    if *pos_c != 2 * img_width - 1 {
-                        // Деталь справа в новой хромосоме
-                        let (right_piece_r, right_piece_c) = new_chromosome[*pos_r][*pos_c + 1];
-                        if right_piece_r != usize::MAX {
-                            // "Лучший приятель" этой детали
-                            let best_buddy =
-                                pieces_buddies[2][right_piece_r * img_width + right_piece_c];
-                            // Положение правой детали в предках
-                            let (pos_1_r, pos_1_c) =
-                                pos_in_chromosome_1[right_piece_r][right_piece_c];
-                            let (pos_2_r, pos_2_c) =
-                                pos_in_chromosome_2[right_piece_r][right_piece_c];
-                            // Если найденный "лучший приятель" также считает правую деталь "лучшим приятелем",
-                            // и слева от правой детали хотя бы в одном из предков есть этот "лучший приятель",
-                            // и он свободен, то выбираем его
-                            if pieces_buddies[0][best_buddy.0 * img_width + best_buddy.1]
-                                == (right_piece_r, right_piece_c)
-                                && ((pos_1_c != 0
-                                    && chromosome_1[pos_1_r][pos_1_c - 1] == best_buddy)
-                                    || (pos_2_c != 0
-                                        && chromosome_2[pos_2_r][pos_2_c - 1] == best_buddy))
-                                && free_pieces.contains(&best_buddy)
-                            {
-                                return Ok(((*pos_r, *pos_c), best_buddy));
-                            }
+                }
+                // Обработка детали справа
+                if *pos_c != 2 * img_width - 1 {
+                    // Деталь справа в новой хромосоме
+                    let (right_piece_r, right_piece_c) = new_chromosome[*pos_r][*pos_c + 1];
+                    if right_piece_r != usize::MAX {
+                        // "Лучший приятель" этой детали
+                        let best_buddy =
+                            pieces_buddies[2][right_piece_r * img_width + right_piece_c];
+                        // Положение правой детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[right_piece_r][right_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[right_piece_r][right_piece_c];
+                        // Если найденный "лучший приятель" также считает правую деталь "лучшим приятелем",
+                        // и слева от правой детали хотя бы в одном из предков есть этот "лучший приятель",
+                        // и он свободен, то выбираем его
+                        if pieces_buddies[0][best_buddy.0 * img_width + best_buddy.1]
+                            == (right_piece_r, right_piece_c)
+                            && ((pos_1_c != 0 && chromosome_1[pos_1_r][pos_1_c - 1] == best_buddy)
+                                || (pos_2_c != 0
+                                    && chromosome_2[pos_2_r][pos_2_c - 1] == best_buddy))
+                            && free_pieces.contains(&best_buddy)
+                        {
+                            return Ok(((*pos_r, *pos_c), best_buddy));
                         }
                     }
-                    // Обработка детали сверху
-                    if *pos_r != 0 {
-                        // Деталь сверху в новой хромосоме
-                        let (up_piece_r, up_piece_c) = new_chromosome[*pos_r - 1][*pos_c];
-                        if up_piece_r != usize::MAX {
-                            // "Лучший приятель" этой детали
-                            let best_buddy = pieces_buddies[1][up_piece_r * img_width + up_piece_c];
-                            // Положение верхней детали в предках
-                            let (pos_1_r, pos_1_c) = pos_in_chromosome_1[up_piece_r][up_piece_c];
-                            let (pos_2_r, pos_2_c) = pos_in_chromosome_2[up_piece_r][up_piece_c];
-                            // Если найденный "лучший приятель" также считает верхнюю деталь "лучшим приятелем",
-                            // и снизу от верхней детали хотя бы в одном из предков есть этот "лучший приятель",
-                            // и он свободен, то выбираем его
-                            if pieces_buddies[3][best_buddy.0 * img_width + best_buddy.1]
-                                == (up_piece_r, up_piece_c)
-                                && ((pos_1_r != img_height - 1
-                                    && chromosome_1[pos_1_r + 1][pos_1_c] == best_buddy)
-                                    || (pos_2_r != img_height - 1
-                                        && chromosome_2[pos_2_r + 1][pos_2_c] == best_buddy))
-                                && free_pieces.contains(&best_buddy)
-                            {
-                                return Ok(((*pos_r, *pos_c), best_buddy));
-                            }
+                }
+                // Обработка детали сверху
+                if *pos_r != 0 {
+                    // Деталь сверху в новой хромосоме
+                    let (up_piece_r, up_piece_c) = new_chromosome[*pos_r - 1][*pos_c];
+                    if up_piece_r != usize::MAX {
+                        // "Лучший приятель" этой детали
+                        let best_buddy = pieces_buddies[1][up_piece_r * img_width + up_piece_c];
+                        // Положение верхней детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[up_piece_r][up_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[up_piece_r][up_piece_c];
+                        // Если найденный "лучший приятель" также считает верхнюю деталь "лучшим приятелем",
+                        // и снизу от верхней детали хотя бы в одном из предков есть этот "лучший приятель",
+                        // и он свободен, то выбираем его
+                        if pieces_buddies[3][best_buddy.0 * img_width + best_buddy.1]
+                            == (up_piece_r, up_piece_c)
+                            && ((pos_1_r != img_height - 1
+                                && chromosome_1[pos_1_r + 1][pos_1_c] == best_buddy)
+                                || (pos_2_r != img_height - 1
+                                    && chromosome_2[pos_2_r + 1][pos_2_c] == best_buddy))
+                            && free_pieces.contains(&best_buddy)
+                        {
+                            return Ok(((*pos_r, *pos_c), best_buddy));
                         }
                     }
-                    // Обработка детали снизу
-                    if *pos_r != 2 * img_height - 1 {
-                        // Деталь снизу в новой хромосоме
-                        let (down_piece_r, down_piece_c) = new_chromosome[*pos_r + 1][*pos_c];
-                        if down_piece_r != usize::MAX {
-                            // "Лучший приятель" этой детали
-                            let best_buddy =
-                                pieces_buddies[3][down_piece_r * img_width + down_piece_c];
-                            // Положение нижней детали в предках
-                            let (pos_1_r, pos_1_c) =
-                                pos_in_chromosome_1[down_piece_r][down_piece_c];
-                            let (pos_2_r, pos_2_c) =
-                                pos_in_chromosome_2[down_piece_r][down_piece_c];
-                            // Если найденный "лучший приятель" также считает нижнюю деталь "лучшим приятелем",
-                            // и сверху от нижней детали хотя бы в одном из предков есть этот "лучший приятель",
-                            // и он свободен, то выбираем его
-                            if pieces_buddies[1][best_buddy.0 * img_width + best_buddy.1]
-                                == (down_piece_r, down_piece_c)
-                                && ((pos_1_r != 0
-                                    && chromosome_1[pos_1_r - 1][pos_1_c] == best_buddy)
-                                    || (pos_2_r != 0
-                                        && chromosome_2[pos_2_r - 1][pos_2_c] == best_buddy))
-                                && free_pieces.contains(&best_buddy)
-                            {
-                                return Ok(((*pos_r, *pos_c), best_buddy));
-                            }
+                }
+                // Обработка детали снизу
+                if *pos_r != 2 * img_height - 1 {
+                    // Деталь снизу в новой хромосоме
+                    let (down_piece_r, down_piece_c) = new_chromosome[*pos_r + 1][*pos_c];
+                    if down_piece_r != usize::MAX {
+                        // "Лучший приятель" этой детали
+                        let best_buddy = pieces_buddies[3][down_piece_r * img_width + down_piece_c];
+                        // Положение нижней детали в предках
+                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[down_piece_r][down_piece_c];
+                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[down_piece_r][down_piece_c];
+                        // Если найденный "лучший приятель" также считает нижнюю деталь "лучшим приятелем",
+                        // и сверху от нижней детали хотя бы в одном из предков есть этот "лучший приятель",
+                        // и он свободен, то выбираем его
+                        if pieces_buddies[1][best_buddy.0 * img_width + best_buddy.1]
+                            == (down_piece_r, down_piece_c)
+                            && ((pos_1_r != 0 && chromosome_1[pos_1_r - 1][pos_1_c] == best_buddy)
+                                || (pos_2_r != 0
+                                    && chromosome_2[pos_2_r - 1][pos_2_c] == best_buddy))
+                            && free_pieces.contains(&best_buddy)
+                        {
+                            return Ok(((*pos_r, *pos_c), best_buddy));
                         }
                     }
-                    // Позиция не подходит для фазы 2
-                    Err((*pos_r, *pos_c))
-                })
-                .collect();
+                }
+                // Позиция не подходит для фазы 2
+                Err((*pos_r, *pos_c))
+            });
 
-            // Нерассмотренных позиций нет
-            free_positions_not_in_phase_1.clear();
             for res in tmp {
                 match res {
                     // Если позиция подходит для фазы 2, то добавление её
@@ -549,6 +525,8 @@ fn chromosomes_crossover(
                     }
                 }
             }
+            // Нерассмотренных позиций нет
+            free_positions_not_in_phase_1.clear();
 
             // Если есть хотя бы одна подходящая позиция
             if !free_positions_phase_2.is_empty() {
