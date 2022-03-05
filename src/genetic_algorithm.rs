@@ -5,14 +5,16 @@ use image::RgbaImage;
 use indexmap::{IndexMap, IndexSet};
 use rand::{prelude::IteratorRandom, seq::SliceRandom, Rng};
 use rand_xoshiro::Xoshiro256PlusPlus;
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 
 use crate::image_processing::get_lab_image;
 
 pub type Chromosome = Vec<Vec<(usize, usize)>>;
 
 const ELITISM_COUNT: usize = 4;
-const MUTATION_RATE_1: f32 = 0.005;
+const MUTATION_RATE_1: f32 = 0.001;
 const MUTATION_RATE_3: f32 = 0.005;
 
 // Вычисление несовместимостей деталей
@@ -94,7 +96,7 @@ pub fn find_best_buddies(
     // Нахождение приятелей справа и снизу от детали
     let get_buddies = |ind: usize| {
         pieces_dissimilarity[ind]
-            .iter()
+            .par_iter()
             .enumerate()
             .map(|(i, v)| {
                 v.iter()
@@ -112,6 +114,7 @@ pub fn find_best_buddies(
     // Нахождение приятелей слева и сверху от детали
     let get_opposite_buddies = |ind: usize| {
         (0..pieces_dissimilarity[ind].len())
+            .into_par_iter()
             .map(|i| {
                 pieces_dissimilarity[ind]
                     .iter()
