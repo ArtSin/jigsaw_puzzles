@@ -224,9 +224,9 @@ fn chromosomes_crossover(
     // Свободные нерассмотренные позиции
     let mut free_positions_unknown = IndexSet::new();
     // Позиции, не подходящие для фазы 1
-    let mut bad_positions_phase_1 = IndexSet::new();
+    let mut bad_positions_phase_1 = vec![vec![false; 2 * img_width]; 2 * img_height];
     // Позиции, не подходящие для фазы 2
-    let mut bad_positions_phase_2 = IndexSet::new();
+    let mut bad_positions_phase_2 = vec![vec![false; 2 * img_width]; 2 * img_height];
     // Соответствие деталям позиций, подходящих для фазы 1
     let mut piece_to_pos_phase_1: IndexMap<(usize, usize), Vec<(usize, usize)>> = IndexMap::new();
     // Соответствие деталям позиций, подходящих для фазы 2
@@ -379,7 +379,7 @@ fn chromosomes_crossover(
                     // Если не подходит, то добавление позиции в список не подходящих для фазы 1
                     // и тех, которые должны быть рассмотрены в фазе 2 или 3
                     Err(pos) => {
-                        bad_positions_phase_1.insert(pos);
+                        bad_positions_phase_1[pos.0][pos.1] = true;
                         free_positions_not_in_phase_1.insert(pos);
                     }
                 }
@@ -544,7 +544,7 @@ fn chromosomes_crossover(
                     // Если не подходит, то добавление позиции в список не подходящих для фазы 2
                     // и подходящих для фазы 3
                     Err(pos) => {
-                        bad_positions_phase_2.insert(pos);
+                        bad_positions_phase_2[pos.0][pos.1] = true;
                         free_positions_phase_3.insert(pos);
                     }
                 }
@@ -693,8 +693,8 @@ fn chromosomes_crossover(
                     free_positions_phase_1.remove(pos);
                     free_positions_phase_3.remove(pos);
                     free_positions_not_in_phase_1.remove(pos);
-                    bad_positions_phase_1.remove(pos);
-                    bad_positions_phase_2.remove(pos);
+                    bad_positions_phase_1[pos.0][pos.1] = false;
+                    bad_positions_phase_2[pos.0][pos.1] = false;
                     if new_chromosome[pos.0][pos.1].0 == usize::MAX {
                         free_positions_unknown.insert(*pos);
                     }
@@ -709,8 +709,8 @@ fn chromosomes_crossover(
                     free_positions_phase_2.remove(pos);
                     free_positions_phase_3.remove(pos);
                     free_positions_not_in_phase_1.remove(pos);
-                    bad_positions_phase_1.remove(pos);
-                    bad_positions_phase_2.remove(pos);
+                    bad_positions_phase_1[pos.0][pos.1] = false;
+                    bad_positions_phase_2[pos.0][pos.1] = false;
                     if new_chromosome[pos.0][pos.1].0 == usize::MAX {
                         free_positions_unknown.insert(*pos);
                     }
@@ -725,21 +725,25 @@ fn chromosomes_crossover(
             // Если достигнута полная высота изображения, удалить все позиции, выходящие за границы
             if 1 + max_r - min_r == img_height {
                 for c in 0..(2 * img_width) {
-                    free_positions_phase_1.remove(&(min_r - 1, c));
-                    free_positions_phase_2.remove(&(min_r - 1, c));
-                    free_positions_phase_3.remove(&(min_r - 1, c));
-                    free_positions_not_in_phase_1.remove(&(min_r - 1, c));
-                    free_positions_unknown.remove(&(min_r - 1, c));
-                    bad_positions_phase_1.remove(&(min_r - 1, c));
-                    bad_positions_phase_2.remove(&(min_r - 1, c));
+                    if min_r >= 1 {
+                        free_positions_phase_1.remove(&(min_r - 1, c));
+                        free_positions_phase_2.remove(&(min_r - 1, c));
+                        free_positions_phase_3.remove(&(min_r - 1, c));
+                        free_positions_not_in_phase_1.remove(&(min_r - 1, c));
+                        free_positions_unknown.remove(&(min_r - 1, c));
+                        bad_positions_phase_1[min_r - 1][c] = false;
+                        bad_positions_phase_2[min_r - 1][c] = false;
+                    }
 
-                    free_positions_phase_1.remove(&(max_r + 1, c));
-                    free_positions_phase_2.remove(&(max_r + 1, c));
-                    free_positions_phase_3.remove(&(max_r + 1, c));
-                    free_positions_not_in_phase_1.remove(&(max_r + 1, c));
-                    free_positions_unknown.remove(&(max_r + 1, c));
-                    bad_positions_phase_1.remove(&(max_r + 1, c));
-                    bad_positions_phase_2.remove(&(max_r + 1, c));
+                    if max_r + 1 < 2 * img_height {
+                        free_positions_phase_1.remove(&(max_r + 1, c));
+                        free_positions_phase_2.remove(&(max_r + 1, c));
+                        free_positions_phase_3.remove(&(max_r + 1, c));
+                        free_positions_not_in_phase_1.remove(&(max_r + 1, c));
+                        free_positions_unknown.remove(&(max_r + 1, c));
+                        bad_positions_phase_1[max_r + 1][c] = false;
+                        bad_positions_phase_2[max_r + 1][c] = false;
+                    }
                 }
             }
         }
@@ -749,21 +753,25 @@ fn chromosomes_crossover(
             // Если достигнута полная высота изображения, удалить все позиции, выходящие за границы
             if 1 + max_r - min_r == img_height {
                 for c in 0..(2 * img_width) {
-                    free_positions_phase_1.remove(&(min_r - 1, c));
-                    free_positions_phase_2.remove(&(min_r - 1, c));
-                    free_positions_phase_3.remove(&(min_r - 1, c));
-                    free_positions_not_in_phase_1.remove(&(min_r - 1, c));
-                    free_positions_unknown.remove(&(min_r - 1, c));
-                    bad_positions_phase_1.remove(&(max_r - 1, c));
-                    bad_positions_phase_2.remove(&(max_r - 1, c));
+                    if min_r >= 1 {
+                        free_positions_phase_1.remove(&(min_r - 1, c));
+                        free_positions_phase_2.remove(&(min_r - 1, c));
+                        free_positions_phase_3.remove(&(min_r - 1, c));
+                        free_positions_not_in_phase_1.remove(&(min_r - 1, c));
+                        free_positions_unknown.remove(&(min_r - 1, c));
+                        bad_positions_phase_1[min_r - 1][c] = false;
+                        bad_positions_phase_2[min_r - 1][c] = false;
+                    }
 
-                    free_positions_phase_1.remove(&(max_r + 1, c));
-                    free_positions_phase_2.remove(&(max_r + 1, c));
-                    free_positions_phase_3.remove(&(max_r + 1, c));
-                    free_positions_not_in_phase_1.remove(&(max_r + 1, c));
-                    free_positions_unknown.remove(&(max_r + 1, c));
-                    bad_positions_phase_1.remove(&(max_r + 1, c));
-                    bad_positions_phase_2.remove(&(max_r + 1, c));
+                    if max_r + 1 < 2 * img_height {
+                        free_positions_phase_1.remove(&(max_r + 1, c));
+                        free_positions_phase_2.remove(&(max_r + 1, c));
+                        free_positions_phase_3.remove(&(max_r + 1, c));
+                        free_positions_not_in_phase_1.remove(&(max_r + 1, c));
+                        free_positions_unknown.remove(&(max_r + 1, c));
+                        bad_positions_phase_1[max_r + 1][c] = false;
+                        bad_positions_phase_2[max_r + 1][c] = false;
+                    }
                 }
             }
         }
@@ -773,21 +781,25 @@ fn chromosomes_crossover(
             // Если достигнута полная ширина изображения, удалить все позиции, выходящие за границы
             if 1 + max_c - min_c == img_width {
                 for r in 0..(2 * img_height) {
-                    free_positions_phase_1.remove(&(r, min_c - 1));
-                    free_positions_phase_2.remove(&(r, min_c - 1));
-                    free_positions_phase_3.remove(&(r, min_c - 1));
-                    free_positions_not_in_phase_1.remove(&(r, min_c - 1));
-                    free_positions_unknown.remove(&(r, min_c - 1));
-                    bad_positions_phase_1.remove(&(r, min_c - 1));
-                    bad_positions_phase_2.remove(&(r, min_c - 1));
+                    if min_c >= 1 {
+                        free_positions_phase_1.remove(&(r, min_c - 1));
+                        free_positions_phase_2.remove(&(r, min_c - 1));
+                        free_positions_phase_3.remove(&(r, min_c - 1));
+                        free_positions_not_in_phase_1.remove(&(r, min_c - 1));
+                        free_positions_unknown.remove(&(r, min_c - 1));
+                        bad_positions_phase_1[r][min_c - 1] = false;
+                        bad_positions_phase_2[r][min_c - 1] = false;
+                    }
 
-                    free_positions_phase_1.remove(&(r, max_c + 1));
-                    free_positions_phase_2.remove(&(r, max_c + 1));
-                    free_positions_phase_3.remove(&(r, max_c + 1));
-                    free_positions_not_in_phase_1.remove(&(r, max_c + 1));
-                    free_positions_unknown.remove(&(r, max_c + 1));
-                    bad_positions_phase_1.remove(&(r, max_c + 1));
-                    bad_positions_phase_2.remove(&(r, max_c + 1));
+                    if max_c + 1 < 2 * img_width {
+                        free_positions_phase_1.remove(&(r, max_c + 1));
+                        free_positions_phase_2.remove(&(r, max_c + 1));
+                        free_positions_phase_3.remove(&(r, max_c + 1));
+                        free_positions_not_in_phase_1.remove(&(r, max_c + 1));
+                        free_positions_unknown.remove(&(r, max_c + 1));
+                        bad_positions_phase_1[r][max_c + 1] = false;
+                        bad_positions_phase_2[r][max_c + 1] = false;
+                    }
                 }
             }
         }
@@ -797,21 +809,25 @@ fn chromosomes_crossover(
             // Если достигнута полная ширина изображения, удалить все позиции, выходящие за границы
             if 1 + max_c - min_c == img_width {
                 for r in 0..(2 * img_height) {
-                    free_positions_phase_1.remove(&(r, min_c - 1));
-                    free_positions_phase_2.remove(&(r, min_c - 1));
-                    free_positions_phase_3.remove(&(r, min_c - 1));
-                    free_positions_not_in_phase_1.remove(&(r, min_c - 1));
-                    free_positions_unknown.remove(&(r, min_c - 1));
-                    bad_positions_phase_1.remove(&(r, min_c - 1));
-                    bad_positions_phase_2.remove(&(r, min_c - 1));
+                    if min_c >= 1 {
+                        free_positions_phase_1.remove(&(r, min_c - 1));
+                        free_positions_phase_2.remove(&(r, min_c - 1));
+                        free_positions_phase_3.remove(&(r, min_c - 1));
+                        free_positions_not_in_phase_1.remove(&(r, min_c - 1));
+                        free_positions_unknown.remove(&(r, min_c - 1));
+                        bad_positions_phase_1[r][min_c - 1] = false;
+                        bad_positions_phase_2[r][min_c - 1] = false;
+                    }
 
-                    free_positions_phase_1.remove(&(r, max_c + 1));
-                    free_positions_phase_2.remove(&(r, max_c + 1));
-                    free_positions_phase_3.remove(&(r, max_c + 1));
-                    free_positions_not_in_phase_1.remove(&(r, max_c + 1));
-                    free_positions_unknown.remove(&(r, max_c + 1));
-                    bad_positions_phase_1.remove(&(r, max_c + 1));
-                    bad_positions_phase_2.remove(&(r, max_c + 1));
+                    if max_c + 1 < 2 * img_width {
+                        free_positions_phase_1.remove(&(r, max_c + 1));
+                        free_positions_phase_2.remove(&(r, max_c + 1));
+                        free_positions_phase_3.remove(&(r, max_c + 1));
+                        free_positions_not_in_phase_1.remove(&(r, max_c + 1));
+                        free_positions_unknown.remove(&(r, max_c + 1));
+                        bad_positions_phase_1[r][max_c + 1] = false;
+                        bad_positions_phase_2[r][max_c + 1] = false;
+                    }
                 }
             }
         }
@@ -828,15 +844,15 @@ fn chromosomes_crossover(
             if new_chromosome[new_r][selected_pos_c].0 == usize::MAX
                 && ((!free_positions_phase_1.contains_key(&(new_r, selected_pos_c))
                     && !free_positions_phase_2.contains_key(&(new_r, selected_pos_c)))
-                    || bad_positions_phase_1.contains(&(new_r, selected_pos_c))
-                    || bad_positions_phase_2.contains(&(new_r, selected_pos_c)))
+                    || bad_positions_phase_1[new_r][selected_pos_c]
+                    || bad_positions_phase_2[new_r][selected_pos_c])
             {
                 free_positions_phase_1.remove(&(new_r, selected_pos_c));
                 free_positions_phase_2.remove(&(new_r, selected_pos_c));
                 free_positions_phase_3.remove(&(new_r, selected_pos_c));
                 free_positions_not_in_phase_1.remove(&(new_r, selected_pos_c));
-                bad_positions_phase_1.remove(&(new_r, selected_pos_c));
-                bad_positions_phase_2.remove(&(new_r, selected_pos_c));
+                bad_positions_phase_1[new_r][selected_pos_c] = false;
+                bad_positions_phase_2[new_r][selected_pos_c] = false;
                 free_positions_unknown.insert((new_r, selected_pos_c));
             }
         }
@@ -852,15 +868,15 @@ fn chromosomes_crossover(
             if new_chromosome[selected_pos_r][new_c].0 == usize::MAX
                 && ((!free_positions_phase_1.contains_key(&(selected_pos_r, new_c))
                     && !free_positions_phase_2.contains_key(&(selected_pos_r, new_c)))
-                    || bad_positions_phase_1.contains(&(selected_pos_r, new_c))
-                    || bad_positions_phase_2.contains(&(selected_pos_r, new_c)))
+                    || bad_positions_phase_1[selected_pos_r][new_c]
+                    || bad_positions_phase_2[selected_pos_r][new_c])
             {
                 free_positions_phase_1.remove(&(selected_pos_r, new_c));
                 free_positions_phase_2.remove(&(selected_pos_r, new_c));
                 free_positions_phase_3.remove(&(selected_pos_r, new_c));
                 free_positions_not_in_phase_1.remove(&(selected_pos_r, new_c));
-                bad_positions_phase_1.remove(&(selected_pos_r, new_c));
-                bad_positions_phase_2.remove(&(selected_pos_r, new_c));
+                bad_positions_phase_1[selected_pos_r][new_c] = false;
+                bad_positions_phase_2[selected_pos_r][new_c] = false;
                 free_positions_unknown.insert((selected_pos_r, new_c));
             }
         }
