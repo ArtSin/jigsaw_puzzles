@@ -198,7 +198,11 @@ fn chromosomes_crossover(
         .collect();
     let mut free_positions_phase_1 = IndexMap::new();
     let mut free_positions_phase_2 = IndexMap::new();
+    let mut free_positions_phase_3 = IndexSet::new();
+    let mut free_positions_not_in_phase_1 = IndexSet::new();
     let mut free_positions_unknown = IndexSet::new();
+    let mut bad_positions_phase_1 = IndexSet::new();
+    let mut bad_positions_phase_2 = IndexSet::new();
     let mut piece_to_pos_phase_1: IndexMap<(usize, usize), Vec<(usize, usize)>> = IndexMap::new();
     let mut piece_to_pos_phase_2: IndexMap<(usize, usize), Vec<(usize, usize)>> = IndexMap::new();
 
@@ -217,6 +221,8 @@ fn chromosomes_crossover(
     free_positions_unknown.insert((img_height, img_width));
     while !free_positions_phase_1.is_empty()
         || !free_positions_phase_2.is_empty()
+        || !free_positions_phase_3.is_empty()
+        || !free_positions_not_in_phase_1.is_empty()
         || !free_positions_unknown.is_empty()
     {
         let mut selected_pos = None;
@@ -231,10 +237,14 @@ fn chromosomes_crossover(
         }
 
         // Phase 1 (both parents agree)
+        // https://docs.rs/itertools/latest/itertools/trait.Itertools.html#method.partition_map
+        // Запоминать, какие детали не подходят для 1, 2 фазы, убирать из unknown и добавлять в free_positions_phase_3
+        // Возвращать в unknown при обновлении их соседа
         if selected_pos.is_none() {
             let tmp: Vec<_> = free_positions_unknown
                 .iter()
-                .filter_map(|(pos_r, pos_c)| {
+                .map(|(pos_r, pos_c)| {
+                    assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
                     // Деталь слева
                     if *pos_c != 0 {
                         let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
@@ -249,10 +259,7 @@ fn chromosomes_crossover(
                                     == chromosome_2[pos_2_r][pos_2_c + 1]
                                 && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c + 1])
                             {
-                                return Some((
-                                    (*pos_r, *pos_c),
-                                    chromosome_1[pos_1_r][pos_1_c + 1],
-                                ));
+                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c + 1]));
                             }
                         }
                     }
@@ -270,10 +277,7 @@ fn chromosomes_crossover(
                                     == chromosome_2[pos_2_r][pos_2_c - 1]
                                 && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c - 1])
                             {
-                                return Some((
-                                    (*pos_r, *pos_c),
-                                    chromosome_1[pos_1_r][pos_1_c - 1],
-                                ));
+                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c - 1]));
                             }
                         }
                     }
@@ -289,10 +293,7 @@ fn chromosomes_crossover(
                                     == chromosome_2[pos_2_r + 1][pos_2_c]
                                 && free_pieces.contains(&chromosome_1[pos_1_r + 1][pos_1_c])
                             {
-                                return Some((
-                                    (*pos_r, *pos_c),
-                                    chromosome_1[pos_1_r + 1][pos_1_c],
-                                ));
+                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r + 1][pos_1_c]));
                             }
                         }
                     }
@@ -310,24 +311,30 @@ fn chromosomes_crossover(
                                     == chromosome_2[pos_2_r - 1][pos_2_c]
                                 && free_pieces.contains(&chromosome_1[pos_1_r - 1][pos_1_c])
                             {
-                                return Some((
-                                    (*pos_r, *pos_c),
-                                    chromosome_1[pos_1_r - 1][pos_1_c],
-                                ));
+                                return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r - 1][pos_1_c]));
                             }
                         }
                     }
-                    None
+                    Err((*pos_r, *pos_c))
                 })
                 .collect();
-            for (pos, piece) in tmp {
-                free_positions_unknown.remove(&pos);
-                if let Some(v) = piece_to_pos_phase_1.get_mut(&piece) {
-                    v.push(pos);
-                } else {
-                    piece_to_pos_phase_1.insert(piece, vec![pos]);
+
+            free_positions_unknown.clear();
+            for res in tmp {
+                match res {
+                    Ok((pos, piece)) => {
+                        if let Some(v) = piece_to_pos_phase_1.get_mut(&piece) {
+                            v.push(pos);
+                        } else {
+                            piece_to_pos_phase_1.insert(piece, vec![pos]);
+                        }
+                        assert!(free_positions_phase_1.insert(pos, piece).is_none());
+                    }
+                    Err(pos) => {
+                        bad_positions_phase_1.insert(pos);
+                        free_positions_not_in_phase_1.insert(pos);
+                    }
                 }
-                assert!(free_positions_phase_1.insert(pos, piece).is_none());
             }
 
             if !free_positions_phase_1.is_empty() {
@@ -339,6 +346,7 @@ fn chromosomes_crossover(
                     piece = free_pieces.get_index(ind).unwrap();
                 }
 
+                assert!(new_chromosome[pos.0][pos.1].0 == usize::MAX);
                 assert!(free_pieces.contains(piece));
                 selected_pos = Some(*pos);
                 selected_piece = Some(*piece);
@@ -347,9 +355,13 @@ fn chromosomes_crossover(
 
         // Phase 2 (best-buddy)
         if selected_pos.is_none() {
+            //free_positions_unknown.extend(&free_positions_not_in_phase_1);
+            //free_positions_not_in_phase_1.clear();
             let tmp: Vec<_> = free_positions_unknown
                 .iter()
-                .filter_map(|(pos_r, pos_c)| {
+                .chain(free_positions_not_in_phase_1.iter())
+                .map(|(pos_r, pos_c)| {
+                    assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
                     // Деталь слева
                     if *pos_c != 0 {
                         let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
@@ -368,7 +380,7 @@ fn chromosomes_crossover(
                                         && chromosome_2[pos_2_r][pos_2_c + 1] == best_buddy))
                                 && free_pieces.contains(&best_buddy)
                             {
-                                return Some(((*pos_r, *pos_c), best_buddy));
+                                return Ok(((*pos_r, *pos_c), best_buddy));
                             }
                         }
                     }
@@ -390,7 +402,7 @@ fn chromosomes_crossover(
                                         && chromosome_2[pos_2_r][pos_2_c - 1] == best_buddy))
                                 && free_pieces.contains(&best_buddy)
                             {
-                                return Some(((*pos_r, *pos_c), best_buddy));
+                                return Ok(((*pos_r, *pos_c), best_buddy));
                             }
                         }
                     }
@@ -409,7 +421,7 @@ fn chromosomes_crossover(
                                         && chromosome_2[pos_2_r + 1][pos_2_c] == best_buddy))
                                 && free_pieces.contains(&best_buddy)
                             {
-                                return Some(((*pos_r, *pos_c), best_buddy));
+                                return Ok(((*pos_r, *pos_c), best_buddy));
                             }
                         }
                     }
@@ -431,27 +443,38 @@ fn chromosomes_crossover(
                                         && chromosome_2[pos_2_r - 1][pos_2_c] == best_buddy))
                                 && free_pieces.contains(&best_buddy)
                             {
-                                return Some(((*pos_r, *pos_c), best_buddy));
+                                return Ok(((*pos_r, *pos_c), best_buddy));
                             }
                         }
                     }
-                    None
+                    Err((*pos_r, *pos_c))
                 })
                 .collect();
-            for (pos, piece) in tmp {
-                free_positions_unknown.remove(&pos);
-                if let Some(v) = piece_to_pos_phase_2.get_mut(&piece) {
-                    v.push(pos);
-                } else {
-                    piece_to_pos_phase_2.insert(piece, vec![pos]);
+
+            free_positions_not_in_phase_1.clear();
+            free_positions_unknown.clear();
+            for res in tmp {
+                match res {
+                    Ok((pos, piece)) => {
+                        if let Some(v) = piece_to_pos_phase_2.get_mut(&piece) {
+                            v.push(pos);
+                        } else {
+                            piece_to_pos_phase_2.insert(piece, vec![pos]);
+                        }
+                        assert!(free_positions_phase_2.insert(pos, piece).is_none());
+                    }
+                    Err(pos) => {
+                        bad_positions_phase_2.insert(pos);
+                        free_positions_phase_3.insert(pos);
+                    }
                 }
-                assert!(free_positions_phase_2.insert(pos, piece).is_none());
             }
 
             if !free_positions_phase_2.is_empty() {
                 let ind = rng.gen_range(0..free_positions_phase_2.len());
                 let (pos, piece) = free_positions_phase_2.get_index(ind).unwrap();
 
+                assert!(new_chromosome[pos.0][pos.1].0 == usize::MAX);
                 assert!(free_pieces.contains(piece));
                 selected_pos = Some(*pos);
                 selected_piece = Some(*piece);
@@ -460,8 +483,11 @@ fn chromosomes_crossover(
 
         // Phase 3 (most compatible)
         if selected_pos.is_none() {
-            let ind = rng.gen_range(0..free_positions_unknown.len());
-            let (pos_r, pos_c) = *free_positions_unknown.get_index(ind).unwrap();
+            assert!(!free_positions_phase_3.is_empty());
+            assert!(!free_pieces.is_empty());
+
+            let ind = rng.gen_range(0..free_positions_phase_3.len());
+            let (pos_r, pos_c) = *free_positions_phase_3.get_index(ind).unwrap();
 
             let mut best_piece = (usize::MAX, usize::MAX);
             if rng.gen_range(0.0f32..1.0) <= MUTATION_RATE_3 {
@@ -545,6 +571,7 @@ fn chromosomes_crossover(
                 }
             }
 
+            assert!(new_chromosome[pos_r][pos_c].0 == usize::MAX);
             assert!(free_pieces.contains(&best_piece));
             selected_pos = Some((pos_r, pos_c));
             selected_piece = Some(best_piece);
@@ -556,13 +583,20 @@ fn chromosomes_crossover(
         new_chromosome[selected_pos_r][selected_pos_c] = selected_piece;
         free_positions_phase_1.remove(&selected_pos);
         free_positions_phase_2.remove(&selected_pos);
+        free_positions_phase_3.remove(&selected_pos);
         free_positions_unknown.remove(&selected_pos);
         free_pieces.remove(&selected_piece);
         if let Some(v) = piece_to_pos_phase_1.get(&selected_piece) {
             for pos in v {
                 if free_positions_phase_1.contains_key(pos) {
                     free_positions_phase_1.remove(pos);
-                    free_positions_unknown.insert(*pos);
+                    free_positions_phase_3.remove(pos);
+                    free_positions_not_in_phase_1.remove(pos);
+                    bad_positions_phase_1.remove(pos);
+                    bad_positions_phase_2.remove(pos);
+                    if new_chromosome[pos.0][pos.1].0 == usize::MAX {
+                        free_positions_unknown.insert(*pos);
+                    }
                 }
             }
             piece_to_pos_phase_1.remove(&selected_piece);
@@ -571,7 +605,13 @@ fn chromosomes_crossover(
             for pos in v {
                 if free_positions_phase_2.contains_key(pos) {
                     free_positions_phase_2.remove(pos);
-                    free_positions_unknown.insert(*pos);
+                    free_positions_phase_3.remove(pos);
+                    free_positions_not_in_phase_1.remove(pos);
+                    bad_positions_phase_1.remove(pos);
+                    bad_positions_phase_2.remove(pos);
+                    if new_chromosome[pos.0][pos.1].0 == usize::MAX {
+                        free_positions_unknown.insert(*pos);
+                    }
                 }
             }
             piece_to_pos_phase_2.remove(&selected_piece);
@@ -583,11 +623,19 @@ fn chromosomes_crossover(
                 for c in 0..(2 * img_width) {
                     free_positions_phase_1.remove(&(min_r - 1, c));
                     free_positions_phase_2.remove(&(min_r - 1, c));
+                    free_positions_phase_3.remove(&(min_r - 1, c));
+                    free_positions_not_in_phase_1.remove(&(min_r - 1, c));
                     free_positions_unknown.remove(&(min_r - 1, c));
+                    bad_positions_phase_1.remove(&(min_r - 1, c));
+                    bad_positions_phase_2.remove(&(min_r - 1, c));
 
                     free_positions_phase_1.remove(&(max_r + 1, c));
                     free_positions_phase_2.remove(&(max_r + 1, c));
+                    free_positions_phase_3.remove(&(max_r + 1, c));
+                    free_positions_not_in_phase_1.remove(&(max_r + 1, c));
                     free_positions_unknown.remove(&(max_r + 1, c));
+                    bad_positions_phase_1.remove(&(max_r + 1, c));
+                    bad_positions_phase_2.remove(&(max_r + 1, c));
                 }
             }
         } else if selected_pos_r > max_r {
@@ -596,11 +644,19 @@ fn chromosomes_crossover(
                 for c in 0..(2 * img_width) {
                     free_positions_phase_1.remove(&(min_r - 1, c));
                     free_positions_phase_2.remove(&(min_r - 1, c));
+                    free_positions_phase_3.remove(&(min_r - 1, c));
+                    free_positions_not_in_phase_1.remove(&(min_r - 1, c));
                     free_positions_unknown.remove(&(min_r - 1, c));
+                    bad_positions_phase_1.remove(&(max_r - 1, c));
+                    bad_positions_phase_2.remove(&(max_r - 1, c));
 
                     free_positions_phase_1.remove(&(max_r + 1, c));
                     free_positions_phase_2.remove(&(max_r + 1, c));
+                    free_positions_phase_3.remove(&(max_r + 1, c));
+                    free_positions_not_in_phase_1.remove(&(max_r + 1, c));
                     free_positions_unknown.remove(&(max_r + 1, c));
+                    bad_positions_phase_1.remove(&(max_r + 1, c));
+                    bad_positions_phase_2.remove(&(max_r + 1, c));
                 }
             }
         }
@@ -610,11 +666,19 @@ fn chromosomes_crossover(
                 for r in 0..(2 * img_height) {
                     free_positions_phase_1.remove(&(r, min_c - 1));
                     free_positions_phase_2.remove(&(r, min_c - 1));
+                    free_positions_phase_3.remove(&(r, min_c - 1));
+                    free_positions_not_in_phase_1.remove(&(r, min_c - 1));
                     free_positions_unknown.remove(&(r, min_c - 1));
+                    bad_positions_phase_1.remove(&(r, min_c - 1));
+                    bad_positions_phase_2.remove(&(r, min_c - 1));
 
                     free_positions_phase_1.remove(&(r, max_c + 1));
                     free_positions_phase_2.remove(&(r, max_c + 1));
+                    free_positions_phase_3.remove(&(r, max_c + 1));
+                    free_positions_not_in_phase_1.remove(&(r, max_c + 1));
                     free_positions_unknown.remove(&(r, max_c + 1));
+                    bad_positions_phase_1.remove(&(r, max_c + 1));
+                    bad_positions_phase_2.remove(&(r, max_c + 1));
                 }
             }
         } else if selected_pos_c > max_c {
@@ -623,11 +687,19 @@ fn chromosomes_crossover(
                 for r in 0..(2 * img_height) {
                     free_positions_phase_1.remove(&(r, min_c - 1));
                     free_positions_phase_2.remove(&(r, min_c - 1));
+                    free_positions_phase_3.remove(&(r, min_c - 1));
+                    free_positions_not_in_phase_1.remove(&(r, min_c - 1));
                     free_positions_unknown.remove(&(r, min_c - 1));
+                    bad_positions_phase_1.remove(&(r, min_c - 1));
+                    bad_positions_phase_2.remove(&(r, min_c - 1));
 
                     free_positions_phase_1.remove(&(r, max_c + 1));
                     free_positions_phase_2.remove(&(r, max_c + 1));
+                    free_positions_phase_3.remove(&(r, max_c + 1));
+                    free_positions_not_in_phase_1.remove(&(r, max_c + 1));
                     free_positions_unknown.remove(&(r, max_c + 1));
+                    bad_positions_phase_1.remove(&(r, max_c + 1));
+                    bad_positions_phase_2.remove(&(r, max_c + 1));
                 }
             }
         }
@@ -638,9 +710,17 @@ fn chromosomes_crossover(
                 continue;
             }
             if new_chromosome[new_r][selected_pos_c].0 == usize::MAX
-                && !free_positions_phase_1.contains_key(&(new_r, selected_pos_c))
-                && !free_positions_phase_2.contains_key(&(new_r, selected_pos_c))
+                && ((!free_positions_phase_1.contains_key(&(new_r, selected_pos_c))
+                    && !free_positions_phase_2.contains_key(&(new_r, selected_pos_c)))
+                    || bad_positions_phase_1.contains(&(new_r, selected_pos_c))
+                    || bad_positions_phase_2.contains(&(new_r, selected_pos_c)))
             {
+                free_positions_phase_1.remove(&(new_r, selected_pos_c));
+                free_positions_phase_2.remove(&(new_r, selected_pos_c));
+                free_positions_phase_3.remove(&(new_r, selected_pos_c));
+                free_positions_not_in_phase_1.remove(&(new_r, selected_pos_c));
+                bad_positions_phase_1.remove(&(new_r, selected_pos_c));
+                bad_positions_phase_2.remove(&(new_r, selected_pos_c));
                 free_positions_unknown.insert((new_r, selected_pos_c));
             }
         }
@@ -650,9 +730,17 @@ fn chromosomes_crossover(
                 continue;
             }
             if new_chromosome[selected_pos_r][new_c].0 == usize::MAX
-                && !free_positions_phase_1.contains_key(&(selected_pos_r, new_c))
-                && !free_positions_phase_2.contains_key(&(selected_pos_r, new_c))
+                && ((!free_positions_phase_1.contains_key(&(selected_pos_r, new_c))
+                    && !free_positions_phase_2.contains_key(&(selected_pos_r, new_c)))
+                    || bad_positions_phase_1.contains(&(selected_pos_r, new_c))
+                    || bad_positions_phase_2.contains(&(selected_pos_r, new_c)))
             {
+                free_positions_phase_1.remove(&(selected_pos_r, new_c));
+                free_positions_phase_2.remove(&(selected_pos_r, new_c));
+                free_positions_phase_3.remove(&(selected_pos_r, new_c));
+                free_positions_not_in_phase_1.remove(&(selected_pos_r, new_c));
+                bad_positions_phase_1.remove(&(selected_pos_r, new_c));
+                bad_positions_phase_2.remove(&(selected_pos_r, new_c));
                 free_positions_unknown.insert((selected_pos_r, new_c));
             }
         }
