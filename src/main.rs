@@ -9,7 +9,7 @@ pub mod image_processing;
 fn main() -> iced::Result {
     let settings = Settings {
         window: window::Settings {
-            size: (800, 600),
+            size: (1100, 600),
             ..Default::default()
         },
         default_font: Some(include_bytes!("../assets/NotoSans-Regular.ttf")),

@@ -1,6 +1,7 @@
 use iced::{
-    button, executor, scrollable, Application, Button, Clipboard, Column, Command, Container,
-    Element, HorizontalAlignment, Image, Length, Row, Scrollable, Space, Text, VerticalAlignment,
+    button, executor, scrollable, Application, Button, Checkbox, Clipboard, Column, Command,
+    Container, Element, HorizontalAlignment, Image, Length, Row, Scrollable, Space, Text,
+    VerticalAlignment,
 };
 use iced_aw::{modal, number_input, Card, Modal, NumberInput};
 
@@ -27,6 +28,7 @@ pub struct AppUIState {
     pub main_image_handle: Option<iced::image::Handle>,
     pub main_image_direct_comparison: f32,
     pub main_image_neighbour_comparison: f32,
+    pub show_incorrect_pieces: bool,
     first_generation_button: button::State,
     prev_generation_button: button::State,
     next_generation_button: button::State,
@@ -236,6 +238,11 @@ impl Application for AppState {
                             .max_height(40)
                             .padding(5)
                             .spacing(10)
+                            .push(Checkbox::new(
+                                self.ui.show_incorrect_pieces,
+                                "Показывать\nнеправильные",
+                                AppMessage::ShowIncorrectPiecesCheckboxToggled,
+                            ))
                             .push(Space::new(Length::Fill, Length::Shrink))
                             .push({
                                 let button = Button::new(

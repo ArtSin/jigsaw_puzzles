@@ -1,5 +1,5 @@
 use iced::image::Handle;
-use image::{GenericImage, GenericImageView, ImageBuffer, Pixel, RgbaImage};
+use image::{GenericImage, GenericImageView, ImageBuffer, Pixel, Rgba, RgbaImage};
 use lab::Lab;
 
 use crate::genetic_algorithm::Chromosome;
@@ -21,6 +21,7 @@ pub fn get_chromosome_image(
     image: &RgbaImage,
     piece_size: u32,
     chromosome: &Chromosome,
+    show_incorrect: bool,
 ) -> RgbaImage {
     let pieces: Vec<Vec<_>> = (0..(image.height() / piece_size))
         .map(|r| {
@@ -40,6 +41,32 @@ pub fn get_chromosome_image(
                     (r as u32) * piece_size,
                 )
                 .unwrap();
+            if show_incorrect && (r != *i || c != *j) {
+                for img_r in ((r as u32) * piece_size)..(((r + 1) as u32) * piece_size) {
+                    new_image.put_pixel(
+                        (c as u32) * piece_size,
+                        img_r,
+                        Rgba::from([255u8, 0, 0, 255]),
+                    );
+                    new_image.put_pixel(
+                        ((c + 1) as u32) * piece_size - 1,
+                        img_r,
+                        Rgba::from([255u8, 0, 0, 255]),
+                    );
+                }
+                for img_c in ((c as u32) * piece_size)..(((c + 1) as u32) * piece_size) {
+                    new_image.put_pixel(
+                        img_c,
+                        (r as u32) * piece_size,
+                        Rgba::from([255u8, 0, 0, 255]),
+                    );
+                    new_image.put_pixel(
+                        img_c,
+                        ((r + 1) as u32) * piece_size - 1,
+                        Rgba::from([255u8, 0, 0, 255]),
+                    );
+                }
+            }
         }
     }
     new_image
