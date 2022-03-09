@@ -45,6 +45,7 @@ pub enum AppMessage {
     StartAlgorithmPressed,
     SaveResultsPressed,
     ShowIncorrectPiecesCheckboxToggled(bool),
+    ShowIncorrectDirectNeighbourToggled(bool),
     FirstGenerationPressed,
     PrevGenerationPressed,
     NextGenerationPressed,
@@ -219,6 +220,7 @@ impl AppState {
                     self.piece_size,
                     &algorithm_data.best_chromosomes[image_i][gen],
                     self.ui.show_incorrect_pieces,
+                    self.ui.show_incorrect_direct_neighbour,
                 );
                 self.ui.main_image_handle = Some(get_image_handle(&new_image));
                 self.ui.main_image_direct_comparison =
@@ -241,6 +243,10 @@ impl AppState {
             AppMessage::SaveResultsPressed => self.save_results(),
             AppMessage::ShowIncorrectPiecesCheckboxToggled(x) => {
                 self.ui.show_incorrect_pieces = x;
+                self.load_selected_image()
+            }
+            AppMessage::ShowIncorrectDirectNeighbourToggled(x) => {
+                self.ui.show_incorrect_direct_neighbour = x;
                 self.load_selected_image()
             }
             AppMessage::FirstGenerationPressed => {

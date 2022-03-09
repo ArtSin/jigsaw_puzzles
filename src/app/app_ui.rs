@@ -1,7 +1,6 @@
 use iced::{
-    button, executor, scrollable, Application, Button, Checkbox, Clipboard, Column, Command,
-    Container, Element, HorizontalAlignment, Image, Length, Row, Scrollable, Space, Text,
-    VerticalAlignment,
+    button, executor, scrollable, Align, Application, Button, Checkbox, Clipboard, Column, Command,
+    Container, Element, HorizontalAlignment, Image, Length, Radio, Row, Scrollable, Space, Text,
 };
 use iced_aw::{modal, number_input, Card, Modal, NumberInput};
 
@@ -29,6 +28,7 @@ pub struct AppUIState {
     pub main_image_direct_comparison: f32,
     pub main_image_neighbour_comparison: f32,
     pub show_incorrect_pieces: bool,
+    pub show_incorrect_direct_neighbour: bool,
     first_generation_button: button::State,
     prev_generation_button: button::State,
     next_generation_button: button::State,
@@ -235,15 +235,8 @@ impl Application for AppState {
                 .push(
                     Container::new(
                         Row::new()
-                            .max_height(40)
-                            .padding(5)
                             .spacing(10)
-                            .push(Checkbox::new(
-                                self.ui.show_incorrect_pieces,
-                                "Показывать\nнеправильные",
-                                AppMessage::ShowIncorrectPiecesCheckboxToggled,
-                            ))
-                            .push(Space::new(Length::Fill, Length::Shrink))
+                            .align_items(Align::Center)
                             .push({
                                 let button = Button::new(
                                     &mut self.ui.first_generation_button,
@@ -275,17 +268,12 @@ impl Application for AppState {
                                 }
                             })
                             .push(
-                                Container::new(
-                                    Text::new(format!(
-                                        "Поколение\n{} / {}",
-                                        self.ui.main_image_selected_generation.unwrap() + 1,
-                                        gen_cnt
-                                    ))
-                                    .horizontal_alignment(HorizontalAlignment::Center)
-                                    .vertical_alignment(VerticalAlignment::Center),
-                                )
-                                .height(Length::Fill)
-                                .center_y(),
+                                Text::new(format!(
+                                    "Поколение\n{} / {}",
+                                    self.ui.main_image_selected_generation.unwrap() + 1,
+                                    gen_cnt
+                                ))
+                                .horizontal_alignment(HorizontalAlignment::Center),
                             )
                             .push({
                                 let button = Button::new(
@@ -316,21 +304,45 @@ impl Application for AppState {
                                 } else {
                                     button
                                 }
-                            })
-                            .push(Space::new(Length::Fill, Length::Shrink))
-                            .push(
-                                Container::new(
-                                    Text::new(format!(
-                                        "Прямое сравнение: {:.2}%\nСравнение по соседям: {:.2}%",
-                                        self.ui.main_image_direct_comparison,
-                                        self.ui.main_image_neighbour_comparison
-                                    ))
-                                    .vertical_alignment(VerticalAlignment::Center),
-                                )
-                                .height(Length::Fill)
-                                .center_y(),
-                            ),
+                            }),
                     )
+                    .width(Length::Fill)
+                    .center_x(),
+                )
+                .push(
+                    Container::new(
+                        Row::new()
+                            .spacing(10)
+                            .align_items(Align::Center)
+                            .push(Checkbox::new(
+                                self.ui.show_incorrect_pieces,
+                                "Показывать неправильные",
+                                AppMessage::ShowIncorrectPiecesCheckboxToggled,
+                            ))
+                            .push(Radio::new(
+                                false,
+                                "Прямое сравнение",
+                                Some(self.ui.show_incorrect_direct_neighbour),
+                                AppMessage::ShowIncorrectDirectNeighbourToggled,
+                            ))
+                            .push(Radio::new(
+                                true,
+                                "Сравнение по соседям",
+                                Some(self.ui.show_incorrect_direct_neighbour),
+                                AppMessage::ShowIncorrectDirectNeighbourToggled,
+                            )),
+                    )
+                    .width(Length::Fill)
+                    .center_x(),
+                )
+                .push(
+                    Container::new(Row::new().spacing(10).align_items(Align::Center).push(
+                        Text::new(format!(
+                            "Прямое сравнение: {:.2}%, сравнение по соседям: {:.2}%",
+                            self.ui.main_image_direct_comparison,
+                            self.ui.main_image_neighbour_comparison
+                        )),
+                    ))
                     .width(Length::Fill)
                     .center_x(),
                 );

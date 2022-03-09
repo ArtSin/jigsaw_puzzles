@@ -22,10 +22,19 @@ pub fn get_chromosome_image(
     piece_size: u32,
     chromosome: &Chromosome,
     show_incorrect: bool,
+    show_neighbour: bool,
 ) -> RgbaImage {
-    let pieces: Vec<Vec<_>> = (0..(image.height() / piece_size))
+    // Направления: верх, низ, лево, право
+    const DIRS: [(isize, isize); 4] = [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)];
+
+    let (img_width, img_height) = (
+        (image.width() / piece_size) as usize,
+        (image.height() / piece_size) as usize,
+    );
+
+    let pieces: Vec<Vec<_>> = (0..(img_height as u32))
         .map(|r| {
-            (0..(image.width() / piece_size))
+            (0..(img_width as u32))
                 .map(|c| image.view(c * piece_size, r * piece_size, piece_size, piece_size))
                 .collect()
         })
@@ -41,30 +50,67 @@ pub fn get_chromosome_image(
                     (r as u32) * piece_size,
                 )
                 .unwrap();
-            if show_incorrect && (r != *i || c != *j) {
-                for img_r in ((r as u32) * piece_size)..(((r + 1) as u32) * piece_size) {
-                    new_image.put_pixel(
-                        (c as u32) * piece_size,
-                        img_r,
-                        Rgba::from([255u8, 0, 0, 255]),
-                    );
-                    new_image.put_pixel(
-                        ((c + 1) as u32) * piece_size - 1,
-                        img_r,
-                        Rgba::from([255u8, 0, 0, 255]),
-                    );
-                }
-                for img_c in ((c as u32) * piece_size)..(((c + 1) as u32) * piece_size) {
-                    new_image.put_pixel(
-                        img_c,
-                        (r as u32) * piece_size,
-                        Rgba::from([255u8, 0, 0, 255]),
-                    );
-                    new_image.put_pixel(
-                        img_c,
-                        ((r + 1) as u32) * piece_size - 1,
-                        Rgba::from([255u8, 0, 0, 255]),
-                    );
+
+            if show_incorrect {
+                let (r32, c32) = (r as u32, c as u32);
+                let dirs_ranges = [
+                    (
+                        (r32 * piece_size)..=(r32 * piece_size),
+                        (c32 * piece_size)..=((c32 + 1) * piece_size - 1),
+                    ),
+                    (
+                        ((r32 + 1) * piece_size - 1)..=((r32 + 1) * piece_size - 1),
+                        (c32 * piece_size)..=((c32 + 1) * piece_size - 1),
+                    ),
+                    (
+                        (r32 * piece_size)..=((r32 + 1) * piece_size - 1),
+                        (c32 * piece_size)..=(c32 * piece_size),
+                    ),
+                    (
+                        (r32 * piece_size)..=((r32 + 1) * piece_size - 1),
+                        ((c32 + 1) * piece_size - 1)..=((c32 + 1) * piece_size - 1),
+                    ),
+                ];
+
+                if !show_neighbour && (r != *i || c != *j) {
+                    for (r_range, c_range) in &dirs_ranges {
+                        for img_r in r_range.clone() {
+                            for img_c in c_range.clone() {
+                                new_image.put_pixel(img_c, img_r, Rgba::from([255u8, 0, 0, 255]));
+                            }
+                        }
+                    }
+                } else if show_neighbour {
+                    for (ind, (dr, dc)) in DIRS.iter().enumerate() {
+                        let (new_r, new_c) = ((r as isize) + dr, (c as isize) + dc);
+                        if new_r < 0 || new_c < 0 {
+                            continue;
+                        }
+                        let (new_r, new_c) = (new_r as usize, new_c as usize);
+                        if new_r >= img_height || new_c >= img_width {
+                            continue;
+                        }
+
+                        let (new_i, new_j) = ((*i as isize) + dr, (*j as isize) + dc);
+                        if new_i < 0 || new_j < 0 {
+                            continue;
+                        }
+                        let (new_i, new_j) = (new_i as usize, new_j as usize);
+                        if new_i >= img_height || new_j >= img_width {
+                            continue;
+                        }
+
+                        if chromosome[new_r][new_c] == (new_i, new_j) {
+                            continue;
+                        }
+
+                        let (r_range, c_range) = &dirs_ranges[ind];
+                        for img_r in r_range.clone() {
+                            for img_c in c_range.clone() {
+                                new_image.put_pixel(img_c, img_r, Rgba::from([255u8, 0, 0, 255]));
+                            }
+                        }
+                    }
                 }
             }
         }
