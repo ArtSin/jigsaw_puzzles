@@ -198,15 +198,15 @@ fn chromosomes_crossover(
     );
 
     // Положение каждой детали в каждом предке
-    let mut pos_in_chromosome_1 = vec![vec![(usize::MAX, usize::MAX); img_width]; img_height];
+    let mut pos_in_chromosome_1 = vec![(usize::MAX, usize::MAX); img_width * img_height];
     let mut pos_in_chromosome_2 = pos_in_chromosome_1.clone();
     for r in 0..img_height {
         for c in 0..img_width {
             let (i, j) = chromosome_1[r][c];
-            pos_in_chromosome_1[i][j] = (r, c);
+            pos_in_chromosome_1[i * img_width + j] = (r, c);
 
             let (i, j) = chromosome_2[r][c];
-            pos_in_chromosome_2[i][j] = (r, c);
+            pos_in_chromosome_2[i * img_width + j] = (r, c);
         }
     }
 
@@ -280,8 +280,10 @@ fn chromosomes_crossover(
                     let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
                     if left_piece_r != usize::MAX {
                         // Положение этой детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[left_piece_r][left_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[left_piece_r][left_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[left_piece_r * img_width + left_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[left_piece_r * img_width + left_piece_c];
                         // Если справа от левой детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_c != img_width - 1
                             && pos_2_c != img_width - 1
@@ -299,8 +301,10 @@ fn chromosomes_crossover(
                     let (right_piece_r, right_piece_c) = new_chromosome[*pos_r][*pos_c + 1];
                     if right_piece_r != usize::MAX {
                         // Положение этой детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[right_piece_r][right_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[right_piece_r][right_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[right_piece_r * img_width + right_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[right_piece_r * img_width + right_piece_c];
                         // Если слева от правой детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_c != 0
                             && pos_2_c != 0
@@ -318,8 +322,10 @@ fn chromosomes_crossover(
                     let (up_piece_r, up_piece_c) = new_chromosome[*pos_r - 1][*pos_c];
                     if up_piece_r != usize::MAX {
                         // Положение этой детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[up_piece_r][up_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[up_piece_r][up_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[up_piece_r * img_width + up_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[up_piece_r * img_width + up_piece_c];
                         // Если снизу от верхней детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_r != img_height - 1
                             && pos_2_r != img_height - 1
@@ -337,8 +343,10 @@ fn chromosomes_crossover(
                     let (down_piece_r, down_piece_c) = new_chromosome[*pos_r + 1][*pos_c];
                     if down_piece_r != usize::MAX {
                         // Положение этой детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[down_piece_r][down_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[down_piece_r][down_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[down_piece_r * img_width + down_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[down_piece_r * img_width + down_piece_c];
                         // Если сверху от нижней детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_r != 0
                             && pos_2_r != 0
@@ -411,8 +419,10 @@ fn chromosomes_crossover(
                         // "Лучший приятель" этой детали
                         let best_buddy = pieces_buddies[0][left_piece_r * img_width + left_piece_c];
                         // Положение левой детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[left_piece_r][left_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[left_piece_r][left_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[left_piece_r * img_width + left_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[left_piece_r * img_width + left_piece_c];
                         // Если найденный "лучший приятель" также считает левую деталь "лучшим приятелем",
                         // и справа от левой детали хотя бы в одном из предков есть этот "лучший приятель",
                         // и он свободен, то выбираем его
@@ -437,8 +447,10 @@ fn chromosomes_crossover(
                         let best_buddy =
                             pieces_buddies[2][right_piece_r * img_width + right_piece_c];
                         // Положение правой детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[right_piece_r][right_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[right_piece_r][right_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[right_piece_r * img_width + right_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[right_piece_r * img_width + right_piece_c];
                         // Если найденный "лучший приятель" также считает правую деталь "лучшим приятелем",
                         // и слева от правой детали хотя бы в одном из предков есть этот "лучший приятель",
                         // и он свободен, то выбираем его
@@ -461,8 +473,10 @@ fn chromosomes_crossover(
                         // "Лучший приятель" этой детали
                         let best_buddy = pieces_buddies[1][up_piece_r * img_width + up_piece_c];
                         // Положение верхней детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[up_piece_r][up_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[up_piece_r][up_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[up_piece_r * img_width + up_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[up_piece_r * img_width + up_piece_c];
                         // Если найденный "лучший приятель" также считает верхнюю деталь "лучшим приятелем",
                         // и снизу от верхней детали хотя бы в одном из предков есть этот "лучший приятель",
                         // и он свободен, то выбираем его
@@ -486,8 +500,10 @@ fn chromosomes_crossover(
                         // "Лучший приятель" этой детали
                         let best_buddy = pieces_buddies[3][down_piece_r * img_width + down_piece_c];
                         // Положение нижней детали в предках
-                        let (pos_1_r, pos_1_c) = pos_in_chromosome_1[down_piece_r][down_piece_c];
-                        let (pos_2_r, pos_2_c) = pos_in_chromosome_2[down_piece_r][down_piece_c];
+                        let (pos_1_r, pos_1_c) =
+                            pos_in_chromosome_1[down_piece_r * img_width + down_piece_c];
+                        let (pos_2_r, pos_2_c) =
+                            pos_in_chromosome_2[down_piece_r * img_width + down_piece_c];
                         // Если найденный "лучший приятель" также считает нижнюю деталь "лучшим приятелем",
                         // и сверху от нижней детали хотя бы в одном из предков есть этот "лучший приятель",
                         // и он свободен, то выбираем его
