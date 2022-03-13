@@ -37,8 +37,8 @@ pub fn calculate_dissimilarities(
     // находящейся слева от детали j (строка j_r, столбец j_c)
     let right_dissimilarity: Vec<Vec<f32>> = (0..img_height)
         .into_par_iter()
-        .flat_map(|i_r| {
-            (0..img_width).into_par_iter().map(move |i_c| {
+        .flat_map_iter(|i_r| {
+            (0..img_width).map(move |i_c| {
                 (0..img_height)
                     .flat_map(|j_r| {
                         (0..img_width).map(move |j_c| {
@@ -63,7 +63,8 @@ pub fn calculate_dissimilarities(
     // Вычисление несовместимости детали i (строка i_r, столбец i_c),
     // находящейся сверху от детали j (строка j_r, столбец j_c)
     let down_dissimilarity: Vec<Vec<f32>> = (0..img_height)
-        .flat_map(|i_r| {
+        .into_par_iter()
+        .flat_map_iter(|i_r| {
             (0..img_width).map(move |i_c| {
                 (0..img_height)
                     .flat_map(|j_r| {
