@@ -21,6 +21,7 @@ pub struct AppUIState {
     rand_seed_number_input: number_input::State,
     start_algorithm_button: button::State,
     save_results_button: button::State,
+    save_image_button: button::State,
 
     pub main_image_selected_image: Option<usize>,
     pub main_image_selected_generation: Option<usize>,
@@ -202,6 +203,22 @@ impl Application for AppState {
                         button.on_press(AppMessage::SaveResultsPressed)
                     }
                     _ => button,
+                }
+            })
+            .push({
+                let button = Button::new(
+                    &mut self.ui.save_image_button,
+                    Container::new(Text::new("Сохранить изображение"))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center_x()
+                        .center_y(),
+                )
+                .width(Length::Fill);
+                if self.ui.main_image_selected_image.is_some() {
+                    button.on_press(AppMessage::SaveImagePressed)
+                } else {
+                    button
                 }
             })
             .push(Text::new(status_text));

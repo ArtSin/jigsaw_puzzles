@@ -44,6 +44,7 @@ pub enum AppMessage {
     LoadImagesPressed,
     StartAlgorithmPressed,
     SaveResultsPressed,
+    SaveImagePressed,
     ShowIncorrectPiecesCheckboxToggled(bool),
     ShowIncorrectDirectNeighbourToggled(bool),
     FirstGenerationPressed,
@@ -113,7 +114,9 @@ impl AppState {
             _ => unreachable!(),
         };
 
-        let file_path_option = FileDialog::new().show_save_single_file()?;
+        let file_path_option = FileDialog::new()
+            .add_filter("Таблица (.csv)", &["csv"])
+            .show_save_single_file()?;
         if file_path_option.is_none() {
             return Ok(Command::none());
         }
@@ -151,6 +154,39 @@ impl AppState {
             writeln!(writer)?;
         }
 
+        Ok(Command::none())
+    }
+
+    pub fn save_image(&self) -> Result<Command<AppMessage>, Box<dyn Error>> {
+        let images_data = match &self.load_images_state {
+            LoadImagesState::Loaded(images_data) => images_data,
+            _ => unreachable!(),
+        };
+        let algorithm_data = match &self.algorithm_state {
+            AlgorithmState::Finished(algorithm_data) => algorithm_data,
+            _ => unreachable!(),
+        };
+
+        let file_path_option = FileDialog::new()
+            .add_filter(
+                "Изображение (.jpeg, .png, .ico, .pnm, .bmp, .tiff)",
+                &["jpeg", "png", "ico", "pnm", "bmp", "tiff"],
+            )
+            .show_save_single_file()?;
+        if file_path_option.is_none() {
+            return Ok(Command::none());
+        }
+
+        let image_i = self.ui.main_image_selected_image.unwrap();
+        let gen = self.ui.main_image_selected_generation.unwrap();
+        let image = get_chromosome_image(
+            &images_data.images[image_i],
+            self.piece_size,
+            &algorithm_data.best_chromosomes[image_i][gen],
+            self.ui.show_incorrect_pieces,
+            self.ui.show_incorrect_direct_neighbour,
+        );
+        image.save(file_path_option.unwrap())?;
         Ok(Command::none())
     }
 
@@ -208,29 +244,26 @@ impl AppState {
             LoadImagesState::Loaded(images_data) => images_data,
             _ => unreachable!(),
         };
+        let algorithm_data = match &self.algorithm_state {
+            AlgorithmState::Finished(algorithm_data) => algorithm_data,
+            _ => unreachable!(),
+        };
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
-        match &self.algorithm_state {
-            AlgorithmState::Finished(algorithm_data) => {
-                self.ui.main_image_selected_image = Some(image_i);
-                self.ui.main_image_selected_generation = Some(gen);
-                let new_image = get_chromosome_image(
-                    &images_data.images[image_i],
-                    self.piece_size,
-                    &algorithm_data.best_chromosomes[image_i][gen],
-                    self.ui.show_incorrect_pieces,
-                    self.ui.show_incorrect_direct_neighbour,
-                );
-                self.ui.main_image_handle = Some(get_image_handle(&new_image));
-                self.ui.main_image_direct_comparison =
-                    image_direct_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
-                self.ui.main_image_neighbour_comparison =
-                    image_neighbour_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
-                Ok(Command::none())
-            }
-            _ => unreachable!(),
-        }
+        let new_image = get_chromosome_image(
+            &images_data.images[image_i],
+            self.piece_size,
+            &algorithm_data.best_chromosomes[image_i][gen],
+            self.ui.show_incorrect_pieces,
+            self.ui.show_incorrect_direct_neighbour,
+        );
+        self.ui.main_image_handle = Some(get_image_handle(&new_image));
+        self.ui.main_image_direct_comparison =
+            image_direct_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
+        self.ui.main_image_neighbour_comparison =
+            image_neighbour_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
+        Ok(Command::none())
     }
 
     fn update_with_result(
@@ -241,6 +274,7 @@ impl AppState {
             AppMessage::LoadImagesPressed => self.load_images_start(),
             AppMessage::StartAlgorithmPressed => self.algorithm_start(),
             AppMessage::SaveResultsPressed => self.save_results(),
+            AppMessage::SaveImagePressed => self.save_image(),
             AppMessage::ShowIncorrectPiecesCheckboxToggled(x) => {
                 self.ui.show_incorrect_pieces = x;
                 self.load_selected_image()
