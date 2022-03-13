@@ -223,7 +223,7 @@ fn chromosomes_crossover(
     // Свободные позиции, не подходящие для фазы 1, которые должны быть рассмотрены в фазе 2 или 3
     let mut free_positions_not_in_phase_1 = IndexSet::new();
     // Свободные нерассмотренные позиции
-    let mut free_positions_unknown = IndexSet::new();
+    let mut free_positions_unknown: IndexSet<(usize, usize)> = IndexSet::new();
     // Позиции, не подходящие для фазы 1
     let mut bad_positions_phase_1 = vec![false; 2 * img_width * 2 * img_height];
     // Позиции, не подходящие для фазы 2
@@ -236,21 +236,17 @@ fn chromosomes_crossover(
     // Новая хромосома, получаемая в результате скрещивания
     // Так как неизвестно положение начальной детали в исходном изображении,
     // и построение может идти в любую сторону, высота и ширина в 2 раза больше необходимой
-    let mut new_chromosome: Chromosome = (0..(2 * img_height))
-        .map(|_| {
-            (0..(2 * img_width))
-                .map(|_| (usize::MAX, usize::MAX))
-                .collect()
-        })
-        .collect();
+    let mut new_chromosome: Chromosome =
+        vec![vec![(usize::MAX, usize::MAX); 2 * img_width]; 2 * img_height];
 
     // Текущие грани построенного изображения
     let (mut min_r, mut max_r, mut min_c, mut max_c) =
         (img_height, img_height, img_width, img_width);
-    // Добавление начальной детали в центр
-    free_positions_unknown.insert((img_height, img_width));
+    // Флаг, обозначающий необходимость добавления начальной детали в центр
+    let mut start_flag = true;
     // Пока есть свободные позиции
-    while !free_positions_phase_1.is_empty()
+    while start_flag
+        || !free_positions_phase_1.is_empty()
         || !free_positions_phase_2.is_empty()
         || !free_positions_phase_3.is_empty()
         || !free_positions_not_in_phase_1.is_empty()
@@ -261,9 +257,8 @@ fn chromosomes_crossover(
         let mut selected_piece = None;
 
         // Начальная деталь
-        if free_positions_unknown.len() == 1
-            && free_positions_unknown.contains(&(img_height, img_width))
-        {
+        if start_flag {
+            start_flag = false;
             selected_pos = Some((img_height, img_width));
             selected_piece = Some(start_piece);
         }
