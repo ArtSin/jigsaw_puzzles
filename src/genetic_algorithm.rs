@@ -1,6 +1,7 @@
 use std::cmp::{max, min};
 
 use float_ord::FloatOrd;
+use fxhash::FxBuildHasher;
 use image::RgbaImage;
 use indexmap::{IndexMap, IndexSet};
 use rand::{prelude::IteratorRandom, seq::SliceRandom, Rng};
@@ -211,27 +212,30 @@ fn chromosomes_crossover(
     }
 
     // Свободные детали
-    let mut free_pieces: IndexSet<_> = (0..img_height)
+    let mut free_pieces: IndexSet<_, FxBuildHasher> = (0..img_height)
         .flat_map(|r| (0..img_width).map(move |c| (r, c)))
         .collect();
     // Свободные позиции, подходящие для фазы 1, и детали, которые можно туда поставить
-    let mut free_positions_phase_1 = IndexMap::new();
+    let mut free_positions_phase_1 = IndexMap::with_hasher(FxBuildHasher::default());
     // Свободные позиции, подходящие для фазы 2, и детали, которые можно туда поставить
-    let mut free_positions_phase_2 = IndexMap::new();
+    let mut free_positions_phase_2 = IndexMap::with_hasher(FxBuildHasher::default());
     // Свободные позиции, подходящие для фазы 3
-    let mut free_positions_phase_3 = IndexSet::new();
+    let mut free_positions_phase_3 = IndexSet::with_hasher(FxBuildHasher::default());
     // Свободные позиции, не подходящие для фазы 1, которые должны быть рассмотрены в фазе 2 или 3
-    let mut free_positions_not_in_phase_1 = IndexSet::new();
+    let mut free_positions_not_in_phase_1 = IndexSet::with_hasher(FxBuildHasher::default());
     // Свободные нерассмотренные позиции
-    let mut free_positions_unknown: IndexSet<(usize, usize)> = IndexSet::new();
+    let mut free_positions_unknown: IndexSet<(usize, usize), _> =
+        IndexSet::with_hasher(FxBuildHasher::default());
     // Позиции, не подходящие для фазы 1
     let mut bad_positions_phase_1 = vec![false; 2 * img_width * 2 * img_height];
     // Позиции, не подходящие для фазы 2
     let mut bad_positions_phase_2 = vec![false; 2 * img_width * 2 * img_height];
     // Соответствие деталям позиций, подходящих для фазы 1
-    let mut piece_to_pos_phase_1: IndexMap<(usize, usize), Vec<(usize, usize)>> = IndexMap::new();
+    let mut piece_to_pos_phase_1: IndexMap<(usize, usize), Vec<(usize, usize)>, _> =
+        IndexMap::with_hasher(FxBuildHasher::default());
     // Соответствие деталям позиций, подходящих для фазы 2
-    let mut piece_to_pos_phase_2: IndexMap<(usize, usize), Vec<(usize, usize)>> = IndexMap::new();
+    let mut piece_to_pos_phase_2: IndexMap<(usize, usize), Vec<(usize, usize)>, _> =
+        IndexMap::with_hasher(FxBuildHasher::default());
 
     // Новая хромосома, получаемая в результате скрещивания
     // Так как неизвестно положение начальной детали в исходном изображении,
