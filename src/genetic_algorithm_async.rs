@@ -2,12 +2,14 @@ use std::{error::Error, fmt::Display, sync::Arc};
 
 use iced::Command;
 use image::RgbaImage;
+use jigsaw_puzzles::{
+    calculate_dissimilarities,
+    genetic_algorithm::{algorithm_step, find_best_buddies},
+    Solution,
+};
 use rand_xoshiro::Xoshiro256PlusPlus;
 
-use crate::{
-    app::AppMessage,
-    genetic_algorithm::{algorithm_step, calculate_dissimilarities, find_best_buddies, Chromosome},
-};
+use crate::app::AppMessage;
 
 #[derive(Debug, Clone)]
 pub struct AlgorithmDataRequest {
@@ -22,7 +24,7 @@ pub struct AlgorithmDataRequest {
     pub image_prepared: bool,
     pub pieces_dissimilarity: Arc<[Vec<Vec<f32>>; 2]>,
     pub pieces_buddies: Arc<[Vec<(usize, usize)>; 4]>,
-    pub current_generation: Arc<Vec<Chromosome>>,
+    pub current_generation: Arc<Vec<Solution>>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,8 +34,8 @@ pub struct AlgorithmDataResponse {
     pub image_generations_processed: usize,
     pub pieces_dissimilarity: Option<[Vec<Vec<f32>>; 2]>,
     pub pieces_buddies: Option<[Vec<(usize, usize)>; 4]>,
-    pub current_generation: Option<Vec<Chromosome>>,
-    pub best_chromosome: Option<Chromosome>,
+    pub current_generation: Option<Vec<Solution>>,
+    pub best_chromosome: Option<Solution>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,8 +50,8 @@ pub struct AlgorithmData {
     pub image_generations_processed: usize,
     pub pieces_dissimilarity: Arc<[Vec<Vec<f32>>; 2]>,
     pub pieces_buddies: Arc<[Vec<(usize, usize)>; 4]>,
-    pub current_generation: Arc<Vec<Chromosome>>,
-    pub best_chromosomes: Vec<Vec<Chromosome>>, // лучшая хромосома для каждого изображения и поколения
+    pub current_generation: Arc<Vec<Solution>>,
+    pub best_chromosomes: Vec<Vec<Solution>>, // лучшая хромосома для каждого изображения и поколения
 }
 
 impl AlgorithmData {

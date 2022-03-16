@@ -2,9 +2,7 @@ use app::AppState;
 use iced::{window, Application, Settings};
 
 pub mod app;
-pub mod genetic_algorithm;
 pub mod genetic_algorithm_async;
-pub mod image_processing;
 
 fn main() -> iced::Result {
     let settings = Settings {

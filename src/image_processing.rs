@@ -2,10 +2,11 @@ use iced::image::Handle;
 use image::{GenericImage, GenericImageView, ImageBuffer, Pixel, Rgba, RgbaImage};
 use lab::Lab;
 
-use crate::genetic_algorithm::Chromosome;
+use crate::{Solution, NEIGHBOUR_DIRECTIONS};
 
+// Получение указателя (Handle) на изображение для iced
 pub fn get_image_handle(image: &RgbaImage) -> Handle {
-    // RGBA -> BGRA
+    // Преобразование из RGBA в BGRA
     Handle::from_pixels(
         image.width(),
         image.height(),
@@ -17,18 +18,17 @@ pub fn get_image_handle(image: &RgbaImage) -> Handle {
     )
 }
 
-pub fn get_chromosome_image(
+// Получение изображения решения и отображение неправильных деталей
+pub fn get_solution_image(
     image: &RgbaImage,
     piece_size: u32,
     img_width: usize,
     img_height: usize,
-    chromosome: &Chromosome,
+    solution: &Solution,
     show_incorrect: bool,
     show_neighbour: bool,
 ) -> RgbaImage {
-    // Направления: верх, низ, лево, право
-    const DIRS: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
-
+    // Изображения каждой детали
     let pieces: Vec<Vec<_>> = (0..(img_height as u32))
         .map(|r| {
             (0..(img_width as u32))
@@ -37,10 +37,13 @@ pub fn get_chromosome_image(
         })
         .collect();
 
+    // Изображение решения
     let mut new_image = ImageBuffer::new(image.width(), image.height());
     for r in 0..img_height {
         for c in 0..img_width {
-            let (i, j) = &chromosome[r * img_width + c];
+            // Деталь в заданной позиции
+            let (i, j) = &solution[r * img_width + c];
+            // Копирование изображения детали в нужную позицию
             new_image
                 .copy_from(
                     &*pieces[*i][*j],
@@ -49,8 +52,10 @@ pub fn get_chromosome_image(
                 )
                 .unwrap();
 
+            // Если требуется отображение неправильных деталей
             if show_incorrect {
                 let (r32, c32) = (r as u32, c as u32);
+                // Диапазоны пикселей каждой стороны детали (верх, низ, лево, право)
                 let dirs_ranges = [
                     (
                         (r32 * piece_size)..=(r32 * piece_size),
@@ -70,7 +75,9 @@ pub fn get_chromosome_image(
                     ),
                 ];
 
+                // Прямое сравнение
                 if !show_neighbour && (r != *i || c != *j) {
+                    // Закрашивание всех сторон детали
                     for (r_range, c_range) in &dirs_ranges {
                         for img_r in r_range.clone() {
                             for img_c in c_range.clone() {
@@ -78,9 +85,14 @@ pub fn get_chromosome_image(
                             }
                         }
                     }
-                } else if show_neighbour {
-                    for (ind, (dr, dc)) in DIRS.iter().enumerate() {
+                }
+                // Сравнение по соседям
+                else if show_neighbour {
+                    // Перебор соседей
+                    for (ind, (dr, dc)) in NEIGHBOUR_DIRECTIONS.iter().enumerate() {
+                        // Сосед позиции
                         let (new_r, new_c) = ((r as isize) + dr, (c as isize) + dc);
+                        // Нет соседа, так как позиция на грани изображения
                         if new_r < 0 || new_c < 0 {
                             continue;
                         }
@@ -89,7 +101,9 @@ pub fn get_chromosome_image(
                             continue;
                         }
 
+                        // Сосед детали в исходном изображении
                         let (new_i, new_j) = ((*i as isize) + dr, (*j as isize) + dc);
+                        // Нет соседа
                         if new_i < 0 || new_j < 0 {
                             continue;
                         }
@@ -98,10 +112,12 @@ pub fn get_chromosome_image(
                             continue;
                         }
 
-                        if chromosome[new_r * img_width + new_c] == (new_i, new_j) {
+                        // Если сосед по позиции оказался соседом детали в исходном изображении, то он правильный
+                        if solution[new_r * img_width + new_c] == (new_i, new_j) {
                             continue;
                         }
 
+                        // Если сосед неправильный, то сторона закрашивается
                         let (r_range, c_range) = &dirs_ranges[ind];
                         for img_r in r_range.clone() {
                             for img_c in c_range.clone() {
@@ -116,64 +132,11 @@ pub fn get_chromosome_image(
     new_image
 }
 
+// Преобразование изображения в цветовое пространство L*a*b*
 pub fn get_lab_image(image: &RgbaImage) -> Vec<Lab> {
     let rgb_pixels: Vec<_> = image
         .pixels()
         .flat_map(|rgba_pixel| rgba_pixel.to_rgb().channels().to_vec())
         .collect();
     lab::rgb_bytes_to_labs(&rgb_pixels)
-}
-
-pub fn image_direct_comparison(img_width: usize, chromosome: &Chromosome) -> f32 {
-    (chromosome
-        .iter()
-        .enumerate()
-        .filter(|(rc, ij)| *rc == ij.0 * img_width + ij.1)
-        .count() as f32)
-        * 100.0
-        / (chromosome.len() as f32)
-}
-
-pub fn image_neighbour_comparison(
-    img_width: usize,
-    img_height: usize,
-    chromosome: &Chromosome,
-) -> f32 {
-    (0..img_height)
-        .map(|r| {
-            (0..img_width)
-                .map(|c| {
-                    let (mut res, mut count) = (0usize, 0usize);
-                    let (i, j) = chromosome[r * img_width + c];
-                    for (dr, dc) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
-                        let (new_r, new_c) = ((r as isize) + dr, (c as isize) + dc);
-                        if new_r < 0 || new_c < 0 {
-                            continue;
-                        }
-                        let (new_r, new_c) = (new_r as usize, new_c as usize);
-                        if new_r >= img_height || new_c >= img_width {
-                            continue;
-                        }
-                        count += 1;
-
-                        let (new_i, new_j) = ((i as isize) + dr, (j as isize) + dc);
-                        if new_i < 0 || new_j < 0 {
-                            continue;
-                        }
-                        let (new_i, new_j) = (new_i as usize, new_j as usize);
-                        if new_i >= img_height || new_j >= img_width {
-                            continue;
-                        }
-
-                        if chromosome[new_r * img_width + new_c] == (new_i, new_j) {
-                            res += 1;
-                        }
-                    }
-                    (res as f32) / (count as f32)
-                })
-                .sum::<f32>()
-        })
-        .sum::<f32>()
-        * 100.0
-        / (chromosome.len() as f32)
 }

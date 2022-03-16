@@ -2,7 +2,6 @@ use std::cmp::{max, min};
 
 use float_ord::FloatOrd;
 use fxhash::FxBuildHasher;
-use image::RgbaImage;
 use indexmap::{IndexMap, IndexSet};
 use rand::{prelude::IteratorRandom, seq::SliceRandom, Rng};
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -10,85 +9,11 @@ use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
 };
 
-use crate::image_processing::get_lab_image;
-
-pub type Chromosome = Vec<(usize, usize)>;
+use crate::{chromosome_dissimilarity, generate_random_solution, Solution};
 
 const ELITISM_COUNT: usize = 4;
 const MUTATION_RATE_1: f32 = 0.001;
 const MUTATION_RATE_3: f32 = 0.005;
-
-// Вычисление несовместимостей деталей
-pub fn calculate_dissimilarities(
-    image: &RgbaImage,
-    img_width: usize,
-    img_height: usize,
-    piece_size: usize,
-) -> [Vec<Vec<f32>>; 2] {
-    // Пиксели изображения в цветовом пространстве L*a*b*
-    let lab_pixels = get_lab_image(image);
-    // Ширина изображения в пикселях
-    let image_width = img_width * piece_size;
-
-    // Несовместимость пикселей - разность цветов в пространстве L*a*b*
-    let two_pixels_dissimilarity =
-        |i: usize, j: usize| lab_pixels[i].squared_distance(&lab_pixels[j]);
-
-    // Вычисление несовместимости детали i (строка i_r, столбец i_c),
-    // находящейся слева от детали j (строка j_r, столбец j_c)
-    let right_dissimilarity: Vec<Vec<f32>> = (0..img_height)
-        .into_par_iter()
-        .flat_map_iter(|i_r| {
-            (0..img_width).map(move |i_c| {
-                (0..img_height)
-                    .flat_map(|j_r| {
-                        (0..img_width).map(move |j_c| {
-                            (0..piece_size)
-                                .map(|k| {
-                                    two_pixels_dissimilarity(
-                                        (i_r * piece_size + k) * image_width
-                                            + i_c * piece_size
-                                            + piece_size
-                                            - 1,
-                                        (j_r * piece_size + k) * image_width + j_c * piece_size,
-                                    )
-                                })
-                                .sum::<f32>()
-                                .sqrt()
-                        })
-                    })
-                    .collect()
-            })
-        })
-        .collect();
-    // Вычисление несовместимости детали i (строка i_r, столбец i_c),
-    // находящейся сверху от детали j (строка j_r, столбец j_c)
-    let down_dissimilarity: Vec<Vec<f32>> = (0..img_height)
-        .into_par_iter()
-        .flat_map_iter(|i_r| {
-            (0..img_width).map(move |i_c| {
-                (0..img_height)
-                    .flat_map(|j_r| {
-                        (0..img_width).map(move |j_c| {
-                            (0..piece_size)
-                                .map(|k| {
-                                    two_pixels_dissimilarity(
-                                        (i_r * piece_size + piece_size - 1) * image_width
-                                            + i_c * piece_size
-                                            + k,
-                                        j_r * piece_size * image_width + j_c * piece_size + k,
-                                    )
-                                })
-                                .sum::<f32>()
-                                .sqrt()
-                        })
-                    })
-                    .collect()
-            })
-        })
-        .collect();
-    [right_dissimilarity, down_dissimilarity]
-}
 
 // Нахождение "лучших приятелей"
 pub fn find_best_buddies(
@@ -135,63 +60,16 @@ pub fn find_best_buddies(
     [right_buddies, down_buddies, left_buddies, up_buddies]
 }
 
-// Оценка хромосомы
-fn chromosome_dissimilarity(
-    img_width: usize,
-    img_height: usize,
-    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
-    chromosome: &Chromosome,
-) -> f32 {
-    // Несовместимости деталей по направлению вправо
-    let right_dissimilarities = (0..img_height)
-        .map(|i_r| {
-            (0..(img_width - 1))
-                .map(|i_c| {
-                    let (j_r, j_c) = chromosome[i_r * img_width + i_c];
-                    let (k_r, k_c) = chromosome[i_r * img_width + i_c + 1];
-                    pieces_dissimilarity[0][j_r * img_width + j_c][k_r * img_width + k_c]
-                })
-                .sum::<f32>()
-        })
-        .sum::<f32>();
-    // Несовместимости деталей по направлению вниз
-    let down_dissimilarities = (0..(img_height - 1))
-        .map(|i_r| {
-            (0..img_width)
-                .map(|i_c| {
-                    let (j_r, j_c) = chromosome[i_r * img_width + i_c];
-                    let (k_r, k_c) = chromosome[(i_r + 1) * img_width + i_c];
-                    pieces_dissimilarity[1][j_r * img_width + j_c][k_r * img_width + k_c]
-                })
-                .sum::<f32>()
-        })
-        .sum::<f32>();
-    right_dissimilarities + down_dissimilarities
-}
-
-// Создание случайной хромосомы
-fn generate_random_chromosome<T: Rng>(
-    img_width: usize,
-    img_height: usize,
-    rng: &mut T,
-) -> Chromosome {
-    let mut rand_nums: Vec<_> = (0..img_height)
-        .flat_map(|r| (0..img_width).map(move |c| (r, c)))
-        .collect();
-    rand_nums.shuffle(rng);
-    rand_nums
-}
-
 // Скрещивание
 fn chromosomes_crossover(
     img_width: usize,
     img_height: usize,
     pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
     pieces_buddies: &[Vec<(usize, usize)>; 4],
-    chromosome_1: &Chromosome,
-    chromosome_2: &Chromosome,
+    chromosome_1: &Solution,
+    chromosome_2: &Solution,
     mut rng: Xoshiro256PlusPlus,
-) -> Chromosome {
+) -> Solution {
     // Случайная начальная деталь
     let start_piece = (
         (0..img_height).choose(&mut rng).unwrap(),
@@ -240,7 +118,7 @@ fn chromosomes_crossover(
     // Новая хромосома, получаемая в результате скрещивания
     // Так как неизвестно положение начальной детали в исходном изображении,
     // и построение может идти в любую сторону, высота и ширина в 2 раза больше необходимой
-    let mut new_chromosome: Chromosome =
+    let mut new_chromosome: Solution =
         vec![(usize::MAX, usize::MAX); 2 * img_width * 2 * img_height];
 
     // Текущие грани построенного изображения
@@ -921,6 +799,7 @@ fn chromosomes_crossover(
         .collect()
 }
 
+// Шаг алгоритма
 pub fn algorithm_step(
     population_size: usize,
     rng: &mut Xoshiro256PlusPlus,
@@ -929,12 +808,12 @@ pub fn algorithm_step(
     image_generations_processed: usize,
     pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
     pieces_buddies: &[Vec<(usize, usize)>; 4],
-    current_generation: &[Chromosome],
-) -> Vec<Chromosome> {
+    current_generation: &[Solution],
+) -> Vec<Solution> {
     // Создание нового поколения
-    let mut new_generation: Vec<Chromosome> = if image_generations_processed == 0 {
+    let mut new_generation: Vec<Solution> = if image_generations_processed == 0 {
         (0..population_size)
-            .map(|_| generate_random_chromosome(img_width, img_height, rng))
+            .map(|_| generate_random_solution(img_width, img_height, rng))
             .collect()
     } else {
         // Отбор лучших хромосом

@@ -1,6 +1,10 @@
 use std::{error::Error, fs::File, io::BufWriter, io::Write, mem::swap, sync::Arc, time::Instant};
 
 use iced::{button, Command};
+use jigsaw_puzzles::{
+    image_direct_comparison, image_neighbour_comparison,
+    image_processing::{get_image_handle, get_solution_image},
+};
 use native_dialog::FileDialog;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -12,14 +16,9 @@ use self::{
         LoadImagesState,
     },
 };
-use crate::{
-    genetic_algorithm_async::{
-        algorithm_next, AlgorithmData, AlgorithmDataRequest, AlgorithmError, AlgorithmMessage,
-        AlgorithmState,
-    },
-    image_processing::{
-        get_chromosome_image, get_image_handle, image_direct_comparison, image_neighbour_comparison,
-    },
+use crate::genetic_algorithm_async::{
+    algorithm_next, AlgorithmData, AlgorithmDataRequest, AlgorithmError, AlgorithmMessage,
+    AlgorithmState,
 };
 
 mod app_ui;
@@ -186,7 +185,7 @@ impl AppState {
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
-        let image = get_chromosome_image(
+        let image = get_solution_image(
             &images_data.images[image_i],
             self.piece_size,
             algorithm_data.img_width,
@@ -260,7 +259,7 @@ impl AppState {
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
-        let new_image = get_chromosome_image(
+        let new_image = get_solution_image(
             &images_data.images[image_i],
             self.piece_size,
             algorithm_data.img_width,

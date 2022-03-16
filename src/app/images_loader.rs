@@ -2,9 +2,9 @@ use std::{error::Error, fmt::Display, fs::read_dir, mem::swap, path::PathBuf, sy
 
 use iced::Command;
 use image::RgbaImage;
+use jigsaw_puzzles::image_processing::get_image_handle;
 
 use super::AppMessage;
-use crate::image_processing::get_image_handle;
 
 #[derive(Debug, Clone)]
 pub enum LoadImagesRequest {
