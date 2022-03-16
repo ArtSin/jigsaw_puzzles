@@ -12,7 +12,7 @@ use rayon::iter::{
 
 use crate::image_processing::get_lab_image;
 
-pub type Chromosome = Vec<Vec<(usize, usize)>>;
+pub type Chromosome = Vec<(usize, usize)>;
 
 const ELITISM_COUNT: usize = 4;
 const MUTATION_RATE_1: f32 = 0.001;
@@ -147,8 +147,8 @@ fn chromosome_dissimilarity(
         .map(|i_r| {
             (0..(img_width - 1))
                 .map(|i_c| {
-                    let (j_r, j_c) = chromosome[i_r][i_c];
-                    let (k_r, k_c) = chromosome[i_r][i_c + 1];
+                    let (j_r, j_c) = chromosome[i_r * img_width + i_c];
+                    let (k_r, k_c) = chromosome[i_r * img_width + i_c + 1];
                     pieces_dissimilarity[0][j_r * img_width + j_c][k_r * img_width + k_c]
                 })
                 .sum::<f32>()
@@ -159,8 +159,8 @@ fn chromosome_dissimilarity(
         .map(|i_r| {
             (0..img_width)
                 .map(|i_c| {
-                    let (j_r, j_c) = chromosome[i_r][i_c];
-                    let (k_r, k_c) = chromosome[i_r + 1][i_c];
+                    let (j_r, j_c) = chromosome[i_r * img_width + i_c];
+                    let (k_r, k_c) = chromosome[(i_r + 1) * img_width + i_c];
                     pieces_dissimilarity[1][j_r * img_width + j_c][k_r * img_width + k_c]
                 })
                 .sum::<f32>()
@@ -179,7 +179,7 @@ fn generate_random_chromosome<T: Rng>(
         .flat_map(|r| (0..img_width).map(move |c| (r, c)))
         .collect();
     rand_nums.shuffle(rng);
-    rand_nums.chunks(img_width).map(|v| v.to_vec()).collect()
+    rand_nums
 }
 
 // Скрещивание
@@ -203,10 +203,10 @@ fn chromosomes_crossover(
     let mut pos_in_chromosome_2 = pos_in_chromosome_1.clone();
     for r in 0..img_height {
         for c in 0..img_width {
-            let (i, j) = chromosome_1[r][c];
+            let (i, j) = chromosome_1[r * img_width + c];
             pos_in_chromosome_1[i * img_width + j] = (r, c);
 
-            let (i, j) = chromosome_2[r][c];
+            let (i, j) = chromosome_2[r * img_width + c];
             pos_in_chromosome_2[i * img_width + j] = (r, c);
         }
     }
@@ -241,7 +241,7 @@ fn chromosomes_crossover(
     // Так как неизвестно положение начальной детали в исходном изображении,
     // и построение может идти в любую сторону, высота и ширина в 2 раза больше необходимой
     let mut new_chromosome: Chromosome =
-        vec![vec![(usize::MAX, usize::MAX); 2 * img_width]; 2 * img_height];
+        vec![(usize::MAX, usize::MAX); 2 * img_width * 2 * img_height];
 
     // Текущие грани построенного изображения
     let (mut min_r, mut max_r, mut min_c, mut max_c) =
@@ -271,12 +271,14 @@ fn chromosomes_crossover(
         if selected_pos.is_none() {
             // Обработка нерассмотренных свободных позиций
             let tmp = free_positions_unknown.iter().map(|(pos_r, pos_c)| {
-                assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
+                let (pos_r, pos_c) = (*pos_r, *pos_c);
+                assert!(new_chromosome[pos_r * 2 * img_width + pos_c].0 == usize::MAX);
 
                 // Обработка детали слева
-                if *pos_c != 0 {
+                if pos_c != 0 {
                     // Деталь слева в новой хромосоме
-                    let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
+                    let (left_piece_r, left_piece_c) =
+                        new_chromosome[pos_r * 2 * img_width + pos_c - 1];
                     if left_piece_r != usize::MAX {
                         // Положение этой детали в предках
                         let (pos_1_r, pos_1_c) =
@@ -286,18 +288,23 @@ fn chromosomes_crossover(
                         // Если справа от левой детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_c != img_width - 1
                             && pos_2_c != img_width - 1
-                            && chromosome_1[pos_1_r][pos_1_c + 1]
-                                == chromosome_2[pos_2_r][pos_2_c + 1]
-                            && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c + 1])
+                            && chromosome_1[pos_1_r * img_width + pos_1_c + 1]
+                                == chromosome_2[pos_2_r * img_width + pos_2_c + 1]
+                            && free_pieces
+                                .contains(&chromosome_1[pos_1_r * img_width + pos_1_c + 1])
                         {
-                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c + 1]));
+                            return Ok((
+                                (pos_r, pos_c),
+                                chromosome_1[pos_1_r * img_width + pos_1_c + 1],
+                            ));
                         }
                     }
                 }
                 // Обработка детали справа
-                if *pos_c != 2 * img_width - 1 {
+                if pos_c != 2 * img_width - 1 {
                     // Деталь справа в новой хромосоме
-                    let (right_piece_r, right_piece_c) = new_chromosome[*pos_r][*pos_c + 1];
+                    let (right_piece_r, right_piece_c) =
+                        new_chromosome[pos_r * 2 * img_width + pos_c + 1];
                     if right_piece_r != usize::MAX {
                         // Положение этой детали в предках
                         let (pos_1_r, pos_1_c) =
@@ -307,18 +314,23 @@ fn chromosomes_crossover(
                         // Если слева от правой детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_c != 0
                             && pos_2_c != 0
-                            && chromosome_1[pos_1_r][pos_1_c - 1]
-                                == chromosome_2[pos_2_r][pos_2_c - 1]
-                            && free_pieces.contains(&chromosome_1[pos_1_r][pos_1_c - 1])
+                            && chromosome_1[pos_1_r * img_width + pos_1_c - 1]
+                                == chromosome_2[pos_2_r * img_width + pos_2_c - 1]
+                            && free_pieces
+                                .contains(&chromosome_1[pos_1_r * img_width + pos_1_c - 1])
                         {
-                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r][pos_1_c - 1]));
+                            return Ok((
+                                (pos_r, pos_c),
+                                chromosome_1[pos_1_r * img_width + pos_1_c - 1],
+                            ));
                         }
                     }
                 }
                 // Обработка детали сверху
-                if *pos_r != 0 {
+                if pos_r != 0 {
                     // Деталь сверху в новой хромосоме
-                    let (up_piece_r, up_piece_c) = new_chromosome[*pos_r - 1][*pos_c];
+                    let (up_piece_r, up_piece_c) =
+                        new_chromosome[(pos_r - 1) * 2 * img_width + pos_c];
                     if up_piece_r != usize::MAX {
                         // Положение этой детали в предках
                         let (pos_1_r, pos_1_c) =
@@ -328,18 +340,23 @@ fn chromosomes_crossover(
                         // Если снизу от верхней детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_r != img_height - 1
                             && pos_2_r != img_height - 1
-                            && chromosome_1[pos_1_r + 1][pos_1_c]
-                                == chromosome_2[pos_2_r + 1][pos_2_c]
-                            && free_pieces.contains(&chromosome_1[pos_1_r + 1][pos_1_c])
+                            && chromosome_1[(pos_1_r + 1) * img_width + pos_1_c]
+                                == chromosome_2[(pos_2_r + 1) * img_width + pos_2_c]
+                            && free_pieces
+                                .contains(&chromosome_1[(pos_1_r + 1) * img_width + pos_1_c])
                         {
-                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r + 1][pos_1_c]));
+                            return Ok((
+                                (pos_r, pos_c),
+                                chromosome_1[(pos_1_r + 1) * img_width + pos_1_c],
+                            ));
                         }
                     }
                 }
                 // Обработка детали снизу
-                if *pos_r != 2 * img_height - 1 {
+                if pos_r != 2 * img_height - 1 {
                     // Деталь снизу в новой хромосоме
-                    let (down_piece_r, down_piece_c) = new_chromosome[*pos_r + 1][*pos_c];
+                    let (down_piece_r, down_piece_c) =
+                        new_chromosome[(pos_r + 1) * 2 * img_width + pos_c];
                     if down_piece_r != usize::MAX {
                         // Положение этой детали в предках
                         let (pos_1_r, pos_1_c) =
@@ -349,16 +366,20 @@ fn chromosomes_crossover(
                         // Если сверху от нижней детали в обоих предках одна и та же свободная деталь, то выбираем её
                         if pos_1_r != 0
                             && pos_2_r != 0
-                            && chromosome_1[pos_1_r - 1][pos_1_c]
-                                == chromosome_2[pos_2_r - 1][pos_2_c]
-                            && free_pieces.contains(&chromosome_1[pos_1_r - 1][pos_1_c])
+                            && chromosome_1[(pos_1_r - 1) * img_width + pos_1_c]
+                                == chromosome_2[(pos_2_r - 1) * img_width + pos_2_c]
+                            && free_pieces
+                                .contains(&chromosome_1[(pos_1_r - 1) * img_width + pos_1_c])
                         {
-                            return Ok(((*pos_r, *pos_c), chromosome_1[pos_1_r - 1][pos_1_c]));
+                            return Ok((
+                                (pos_r, pos_c),
+                                chromosome_1[(pos_1_r - 1) * img_width + pos_1_c],
+                            ));
                         }
                     }
                 }
                 // Позиция не подходит для фазы 1
-                Err((*pos_r, *pos_c))
+                Err((pos_r, pos_c))
             });
 
             for res in tmp {
@@ -396,7 +417,7 @@ fn chromosomes_crossover(
                     piece = free_pieces.get_index(ind).unwrap();
                 }
 
-                assert!(new_chromosome[pos.0][pos.1].0 == usize::MAX);
+                assert!(new_chromosome[pos.0 * 2 * img_width + pos.1].0 == usize::MAX);
                 assert!(free_pieces.contains(piece));
                 // Позиция и деталь на данной итерации выбраны
                 selected_pos = Some(*pos);
@@ -408,12 +429,14 @@ fn chromosomes_crossover(
         if selected_pos.is_none() {
             // Обработка свободных позиций, не подходящих для фазы 1
             let tmp = free_positions_not_in_phase_1.iter().map(|(pos_r, pos_c)| {
-                assert!(new_chromosome[*pos_r][*pos_c].0 == usize::MAX);
+                let (pos_r, pos_c) = (*pos_r, *pos_c);
+                assert!(new_chromosome[pos_r * 2 * img_width + pos_c].0 == usize::MAX);
 
                 // Обработка детали слева
-                if *pos_c != 0 {
+                if pos_c != 0 {
                     // Деталь слева в новой хромосоме
-                    let (left_piece_r, left_piece_c) = new_chromosome[*pos_r][*pos_c - 1];
+                    let (left_piece_r, left_piece_c) =
+                        new_chromosome[pos_r * 2 * img_width + pos_c - 1];
                     if left_piece_r != usize::MAX {
                         // "Лучший приятель" этой детали
                         let best_buddy = pieces_buddies[0][left_piece_r * img_width + left_piece_c];
@@ -428,19 +451,21 @@ fn chromosomes_crossover(
                         if pieces_buddies[2][best_buddy.0 * img_width + best_buddy.1]
                             == (left_piece_r, left_piece_c)
                             && ((pos_1_c != img_width - 1
-                                && chromosome_1[pos_1_r][pos_1_c + 1] == best_buddy)
+                                && chromosome_1[pos_1_r * img_width + pos_1_c + 1] == best_buddy)
                                 || (pos_2_c != img_width - 1
-                                    && chromosome_2[pos_2_r][pos_2_c + 1] == best_buddy))
+                                    && chromosome_2[pos_2_r * img_width + pos_2_c + 1]
+                                        == best_buddy))
                             && free_pieces.contains(&best_buddy)
                         {
-                            return Ok(((*pos_r, *pos_c), best_buddy));
+                            return Ok(((pos_r, pos_c), best_buddy));
                         }
                     }
                 }
                 // Обработка детали справа
-                if *pos_c != 2 * img_width - 1 {
+                if pos_c != 2 * img_width - 1 {
                     // Деталь справа в новой хромосоме
-                    let (right_piece_r, right_piece_c) = new_chromosome[*pos_r][*pos_c + 1];
+                    let (right_piece_r, right_piece_c) =
+                        new_chromosome[pos_r * 2 * img_width + pos_c + 1];
                     if right_piece_r != usize::MAX {
                         // "Лучший приятель" этой детали
                         let best_buddy =
@@ -455,19 +480,22 @@ fn chromosomes_crossover(
                         // и он свободен, то выбираем его
                         if pieces_buddies[0][best_buddy.0 * img_width + best_buddy.1]
                             == (right_piece_r, right_piece_c)
-                            && ((pos_1_c != 0 && chromosome_1[pos_1_r][pos_1_c - 1] == best_buddy)
+                            && ((pos_1_c != 0
+                                && chromosome_1[pos_1_r * img_width + pos_1_c - 1] == best_buddy)
                                 || (pos_2_c != 0
-                                    && chromosome_2[pos_2_r][pos_2_c - 1] == best_buddy))
+                                    && chromosome_2[pos_2_r * img_width + pos_2_c - 1]
+                                        == best_buddy))
                             && free_pieces.contains(&best_buddy)
                         {
-                            return Ok(((*pos_r, *pos_c), best_buddy));
+                            return Ok(((pos_r, pos_c), best_buddy));
                         }
                     }
                 }
                 // Обработка детали сверху
-                if *pos_r != 0 {
+                if pos_r != 0 {
                     // Деталь сверху в новой хромосоме
-                    let (up_piece_r, up_piece_c) = new_chromosome[*pos_r - 1][*pos_c];
+                    let (up_piece_r, up_piece_c) =
+                        new_chromosome[(pos_r - 1) * 2 * img_width + pos_c];
                     if up_piece_r != usize::MAX {
                         // "Лучший приятель" этой детали
                         let best_buddy = pieces_buddies[1][up_piece_r * img_width + up_piece_c];
@@ -482,19 +510,21 @@ fn chromosomes_crossover(
                         if pieces_buddies[3][best_buddy.0 * img_width + best_buddy.1]
                             == (up_piece_r, up_piece_c)
                             && ((pos_1_r != img_height - 1
-                                && chromosome_1[pos_1_r + 1][pos_1_c] == best_buddy)
+                                && chromosome_1[(pos_1_r + 1) * img_width + pos_1_c] == best_buddy)
                                 || (pos_2_r != img_height - 1
-                                    && chromosome_2[pos_2_r + 1][pos_2_c] == best_buddy))
+                                    && chromosome_2[(pos_2_r + 1) * img_width + pos_2_c]
+                                        == best_buddy))
                             && free_pieces.contains(&best_buddy)
                         {
-                            return Ok(((*pos_r, *pos_c), best_buddy));
+                            return Ok(((pos_r, pos_c), best_buddy));
                         }
                     }
                 }
                 // Обработка детали снизу
-                if *pos_r != 2 * img_height - 1 {
+                if pos_r != 2 * img_height - 1 {
                     // Деталь снизу в новой хромосоме
-                    let (down_piece_r, down_piece_c) = new_chromosome[*pos_r + 1][*pos_c];
+                    let (down_piece_r, down_piece_c) =
+                        new_chromosome[(pos_r + 1) * 2 * img_width + pos_c];
                     if down_piece_r != usize::MAX {
                         // "Лучший приятель" этой детали
                         let best_buddy = pieces_buddies[3][down_piece_r * img_width + down_piece_c];
@@ -508,17 +538,19 @@ fn chromosomes_crossover(
                         // и он свободен, то выбираем его
                         if pieces_buddies[1][best_buddy.0 * img_width + best_buddy.1]
                             == (down_piece_r, down_piece_c)
-                            && ((pos_1_r != 0 && chromosome_1[pos_1_r - 1][pos_1_c] == best_buddy)
+                            && ((pos_1_r != 0
+                                && chromosome_1[(pos_1_r - 1) * img_width + pos_1_c] == best_buddy)
                                 || (pos_2_r != 0
-                                    && chromosome_2[pos_2_r - 1][pos_2_c] == best_buddy))
+                                    && chromosome_2[(pos_2_r - 1) * img_width + pos_2_c]
+                                        == best_buddy))
                             && free_pieces.contains(&best_buddy)
                         {
-                            return Ok(((*pos_r, *pos_c), best_buddy));
+                            return Ok(((pos_r, pos_c), best_buddy));
                         }
                     }
                 }
                 // Позиция не подходит для фазы 2
-                Err((*pos_r, *pos_c))
+                Err((pos_r, pos_c))
             });
 
             for res in tmp {
@@ -550,7 +582,7 @@ fn chromosomes_crossover(
                 let ind = rng.gen_range(0..free_positions_phase_2.len());
                 let (pos, piece) = free_positions_phase_2.get_index(ind).unwrap();
 
-                assert!(new_chromosome[pos.0][pos.1].0 == usize::MAX);
+                assert!(new_chromosome[pos.0 * 2 * img_width + pos.1].0 == usize::MAX);
                 assert!(free_pieces.contains(piece));
                 // Позиция и деталь на данной итерации выбраны
                 selected_pos = Some(*pos);
@@ -578,25 +610,25 @@ fn chromosomes_crossover(
                 let (left_piece_r, left_piece_c) = if pos_c == 0 {
                     (usize::MAX, usize::MAX)
                 } else {
-                    new_chromosome[pos_r][pos_c - 1]
+                    new_chromosome[pos_r * 2 * img_width + pos_c - 1]
                 };
                 // Деталь справа в новой хромосоме
                 let (right_piece_r, right_piece_c) = if pos_c == 2 * img_width - 1 {
                     (usize::MAX, usize::MAX)
                 } else {
-                    new_chromosome[pos_r][pos_c + 1]
+                    new_chromosome[pos_r * 2 * img_width + pos_c + 1]
                 };
                 // Деталь сверху в новой хромосоме
                 let (up_piece_r, up_piece_c) = if pos_r == 0 {
                     (usize::MAX, usize::MAX)
                 } else {
-                    new_chromosome[pos_r - 1][pos_c]
+                    new_chromosome[(pos_r - 1) * 2 * img_width + pos_c]
                 };
                 // Деталь снизу в новой хромосоме
                 let (down_piece_r, down_piece_c) = if pos_r == 2 * img_height - 1 {
                     (usize::MAX, usize::MAX)
                 } else {
-                    new_chromosome[pos_r + 1][pos_c]
+                    new_chromosome[(pos_r + 1) * 2 * img_width + pos_c]
                 };
 
                 // Наименьшая несовместимость
@@ -660,7 +692,7 @@ fn chromosomes_crossover(
                 }
             }
 
-            assert!(new_chromosome[pos_r][pos_c].0 == usize::MAX);
+            assert!(new_chromosome[pos_r * 2 * img_width + pos_c].0 == usize::MAX);
             assert!(free_pieces.contains(&best_piece));
             // Позиция и деталь на данной итерации выбраны
             selected_pos = Some((pos_r, pos_c));
@@ -672,7 +704,7 @@ fn chromosomes_crossover(
         let selected_piece = selected_piece.unwrap();
         let (selected_pos_r, selected_pos_c) = selected_pos;
         // Установка детали в новой хромосоме
-        new_chromosome[selected_pos_r][selected_pos_c] = selected_piece;
+        new_chromosome[selected_pos_r * 2 * img_width + selected_pos_c] = selected_piece;
         // Удаление позиции из списков свободных позиций
         free_positions_phase_1.remove(&selected_pos);
         free_positions_phase_2.remove(&selected_pos);
@@ -689,7 +721,7 @@ fn chromosomes_crossover(
                     free_positions_not_in_phase_1.remove(pos);
                     bad_positions_phase_1[pos.0 * img_width + pos.1] = false;
                     bad_positions_phase_2[pos.0 * img_width + pos.1] = false;
-                    if new_chromosome[pos.0][pos.1].0 == usize::MAX {
+                    if new_chromosome[pos.0 * 2 * img_width + pos.1].0 == usize::MAX {
                         free_positions_unknown.insert(*pos);
                     }
                 }
@@ -705,7 +737,7 @@ fn chromosomes_crossover(
                     free_positions_not_in_phase_1.remove(pos);
                     bad_positions_phase_1[pos.0 * img_width + pos.1] = false;
                     bad_positions_phase_2[pos.0 * img_width + pos.1] = false;
-                    if new_chromosome[pos.0][pos.1].0 == usize::MAX {
+                    if new_chromosome[pos.0 * 2 * img_width + pos.1].0 == usize::MAX {
                         free_positions_unknown.insert(*pos);
                     }
                 }
@@ -835,7 +867,7 @@ fn chromosomes_crossover(
             // Если позиция свободна и не подходит для фазы 1 или 2 (нет в списках подходящих для этих фаз
             // или уже была рассмотрена и оказалась неподходящей), то добавить её к рассмотрению,
             // удалив из всех списков рассмотренных позиций
-            if new_chromosome[new_r][selected_pos_c].0 == usize::MAX
+            if new_chromosome[new_r * 2 * img_width + selected_pos_c].0 == usize::MAX
                 && ((!free_positions_phase_1.contains_key(&(new_r, selected_pos_c))
                     && !free_positions_phase_2.contains_key(&(new_r, selected_pos_c)))
                     || bad_positions_phase_1[new_r * img_width + selected_pos_c]
@@ -859,7 +891,7 @@ fn chromosomes_crossover(
             // Если позиция свободна и не подходит для фазы 1 или 2 (нет в списках подходящих для этих фаз
             // или уже была рассмотрена и оказалась неподходящей), то добавить её к рассмотрению,
             // удалив из всех списков рассмотренных позиций
-            if new_chromosome[selected_pos_r][new_c].0 == usize::MAX
+            if new_chromosome[selected_pos_r * 2 * img_width + new_c].0 == usize::MAX
                 && ((!free_positions_phase_1.contains_key(&(selected_pos_r, new_c))
                     && !free_positions_phase_2.contains_key(&(selected_pos_r, new_c)))
                     || bad_positions_phase_1[selected_pos_r * img_width + new_c]
@@ -881,7 +913,11 @@ fn chromosomes_crossover(
     assert_eq!(1 + max_c - min_c, img_width);
     // Вырезание результата из новой хромосомы
     (min_r..=max_r)
-        .map(|r| (min_c..=max_c).map(|c| new_chromosome[r][c]).collect())
+        .flat_map(|r| {
+            (min_c..=max_c)
+                .map(|c| new_chromosome[r * 2 * img_width + c])
+                .collect::<Vec<_>>()
+        })
         .collect()
 }
 

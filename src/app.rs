@@ -138,14 +138,21 @@ impl AppState {
                 write!(
                     writer,
                     "{:.2},",
-                    image_direct_comparison(&algorithm_data.best_chromosomes[image_i][gen])
+                    image_direct_comparison(
+                        algorithm_data.img_width,
+                        &algorithm_data.best_chromosomes[image_i][gen]
+                    )
                 )?;
             }
             for image_i in 0..algorithm_data.images_processed {
                 write!(
                     writer,
                     "{:.2}",
-                    image_neighbour_comparison(&algorithm_data.best_chromosomes[image_i][gen])
+                    image_neighbour_comparison(
+                        algorithm_data.img_width,
+                        algorithm_data.img_height,
+                        &algorithm_data.best_chromosomes[image_i][gen]
+                    )
                 )?;
                 if image_i != images_data.loaded - 1 {
                     write!(writer, ",")?;
@@ -182,6 +189,8 @@ impl AppState {
         let image = get_chromosome_image(
             &images_data.images[image_i],
             self.piece_size,
+            algorithm_data.img_width,
+            algorithm_data.img_height,
             &algorithm_data.best_chromosomes[image_i][gen],
             self.ui.show_incorrect_pieces,
             self.ui.show_incorrect_direct_neighbour,
@@ -254,15 +263,22 @@ impl AppState {
         let new_image = get_chromosome_image(
             &images_data.images[image_i],
             self.piece_size,
+            algorithm_data.img_width,
+            algorithm_data.img_height,
             &algorithm_data.best_chromosomes[image_i][gen],
             self.ui.show_incorrect_pieces,
             self.ui.show_incorrect_direct_neighbour,
         );
         self.ui.main_image_handle = Some(get_image_handle(&new_image));
-        self.ui.main_image_direct_comparison =
-            image_direct_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
-        self.ui.main_image_neighbour_comparison =
-            image_neighbour_comparison(&algorithm_data.best_chromosomes[image_i][gen]);
+        self.ui.main_image_direct_comparison = image_direct_comparison(
+            algorithm_data.img_width,
+            &algorithm_data.best_chromosomes[image_i][gen],
+        );
+        self.ui.main_image_neighbour_comparison = image_neighbour_comparison(
+            algorithm_data.img_width,
+            algorithm_data.img_height,
+            &algorithm_data.best_chromosomes[image_i][gen],
+        );
         Ok(Command::none())
     }
 

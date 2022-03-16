@@ -20,17 +20,14 @@ pub fn get_image_handle(image: &RgbaImage) -> Handle {
 pub fn get_chromosome_image(
     image: &RgbaImage,
     piece_size: u32,
+    img_width: usize,
+    img_height: usize,
     chromosome: &Chromosome,
     show_incorrect: bool,
     show_neighbour: bool,
 ) -> RgbaImage {
     // Направления: верх, низ, лево, право
-    const DIRS: [(isize, isize); 4] = [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)];
-
-    let (img_width, img_height) = (
-        (image.width() / piece_size) as usize,
-        (image.height() / piece_size) as usize,
-    );
+    const DIRS: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
     let pieces: Vec<Vec<_>> = (0..(img_height as u32))
         .map(|r| {
@@ -41,8 +38,9 @@ pub fn get_chromosome_image(
         .collect();
 
     let mut new_image = ImageBuffer::new(image.width(), image.height());
-    for (r, v) in chromosome.iter().enumerate() {
-        for (c, (i, j)) in v.iter().enumerate() {
+    for r in 0..img_height {
+        for c in 0..img_width {
+            let (i, j) = &chromosome[r * img_width + c];
             new_image
                 .copy_from(
                     &*pieces[*i][*j],
@@ -100,7 +98,7 @@ pub fn get_chromosome_image(
                             continue;
                         }
 
-                        if chromosome[new_r][new_c] == (new_i, new_j) {
+                        if chromosome[new_r * img_width + new_c] == (new_i, new_j) {
                             continue;
                         }
 
@@ -126,29 +124,27 @@ pub fn get_lab_image(image: &RgbaImage) -> Vec<Lab> {
     lab::rgb_bytes_to_labs(&rgb_pixels)
 }
 
-pub fn image_direct_comparison(chromosome: &Chromosome) -> f32 {
+pub fn image_direct_comparison(img_width: usize, chromosome: &Chromosome) -> f32 {
     (chromosome
         .iter()
         .enumerate()
-        .map(|(r, v)| {
-            v.iter()
-                .enumerate()
-                .filter(|(c, ij)| (r, *c) == **ij)
-                .count()
-        })
-        .sum::<usize>() as f32)
+        .filter(|(rc, ij)| *rc == ij.0 * img_width + ij.1)
+        .count() as f32)
         * 100.0
-        / ((chromosome.len() * chromosome[0].len()) as f32)
+        / (chromosome.len() as f32)
 }
 
-pub fn image_neighbour_comparison(chromosome: &Chromosome) -> f32 {
-    let (img_height, img_width) = (chromosome.len(), chromosome[0].len());
+pub fn image_neighbour_comparison(
+    img_width: usize,
+    img_height: usize,
+    chromosome: &Chromosome,
+) -> f32 {
     (0..img_height)
         .map(|r| {
             (0..img_width)
                 .map(|c| {
                     let (mut res, mut count) = (0usize, 0usize);
-                    let (i, j) = chromosome[r][c];
+                    let (i, j) = chromosome[r * img_width + c];
                     for (dr, dc) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
                         let (new_r, new_c) = ((r as isize) + dr, (c as isize) + dc);
                         if new_r < 0 || new_c < 0 {
@@ -169,7 +165,7 @@ pub fn image_neighbour_comparison(chromosome: &Chromosome) -> f32 {
                             continue;
                         }
 
-                        if chromosome[new_r][new_c] == (new_i, new_j) {
+                        if chromosome[new_r * img_width + new_c] == (new_i, new_j) {
                             res += 1;
                         }
                     }
@@ -179,5 +175,5 @@ pub fn image_neighbour_comparison(chromosome: &Chromosome) -> f32 {
         })
         .sum::<f32>()
         * 100.0
-        / ((img_width * img_height) as f32)
+        / (chromosome.len() as f32)
 }
