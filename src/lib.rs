@@ -119,26 +119,32 @@ pub fn calculate_mgc(
     // Ширина изображения в пикселях
     let image_width = img_width * piece_size;
 
-    let calc_mgc_part = |grad_side: Vec<f32>, grad_mid: Vec<f32>| {
+    let calc_mgc_part = |grad_side: Vec<[f32; 3]>, grad_mid: Vec<[f32; 3]>| {
         const EPS: f32 = 1e-6;
 
-        let sz = grad_side.len() / 3;
-        let means: Vec<f32> = (0..3)
-            .map(|i| (0..sz).map(|j| grad_side[3 * j + i]).sum::<f32>() / (sz as f32))
-            .collect();
-        let cov_denom = 1.0 / ((sz as f32) - 1.0);
+        let sz = grad_side.len() as f32;
+        let means = [0, 1, 2].map(|i| grad_side.iter().map(|v| v[i]).sum::<f32>() / sz);
+        let cov_denom = 1.0 / (sz - 1.0);
         let get_cov = |i, j| {
-            (0..sz)
-                .map(|k| (grad_side[3 * k + i] - means[i]) * (grad_side[3 * k + j] - means[j]))
+            grad_side
+                .iter()
+                .map(|v| (v[i] - means[i]) * (v[j] - means[j]))
                 .sum::<f32>()
                 * cov_denom
         };
-        let a = get_cov(0, 0) + EPS;
+        let get_cov_sqr = |i: usize| {
+            grad_side
+                .iter()
+                .map(|v| (v[i] - means[i]).powi(2))
+                .sum::<f32>()
+                * cov_denom
+        };
+        let a = get_cov_sqr(0) + EPS;
+        let e = get_cov_sqr(1) + EPS;
+        let i = get_cov_sqr(2) + EPS;
         let b = get_cov(0, 1);
         let c = get_cov(0, 2);
-        let e = get_cov(1, 1) + EPS;
         let f = get_cov(1, 2);
-        let i = get_cov(2, 2) + EPS;
         let ei_ff = e * i - f * f;
         let cf_bi = c * f - b * i;
         let bf_ce = b * f - c * e;
@@ -157,18 +163,13 @@ pub fn calculate_mgc(
         ];
         let grad_diff: Vec<_> = grad_mid
             .iter()
-            .enumerate()
-            .map(|(i, x)| x - means[i % 3])
+            .map(|v| [v[0] - means[0], v[1] - means[1], v[2] - means[2]])
             .collect();
-        let res = (0..sz)
-            .map(|i| {
+        let res = grad_diff
+            .iter()
+            .map(|v| {
                 (0..3)
-                    .map(|j| {
-                        (0..3)
-                            .map(|k| grad_diff[3 * i + k] * covs_inv[3 * k + j])
-                            .sum::<f32>()
-                            * grad_diff[3 * i + j]
-                    })
+                    .map(|j| (0..3).map(|k| v[k] * covs_inv[3 * k + j]).sum::<f32>() * v[j])
                     .sum::<f32>()
             })
             .sum::<f32>();
@@ -188,59 +189,53 @@ pub fn calculate_mgc(
                                 .map(|j_c| {
                                     // Градиент из предпоследнего столбца i-й детали в её последний столбец
                                     let grad_l = (0..piece_size)
-                                        .flat_map(|k| {
-                                            (0..3)
-                                                .map(|c| {
-                                                    (rgb_pixels[(i_r * piece_size + k)
+                                        .map(|k| {
+                                            [0, 1, 2].map(|c| {
+                                                (rgb_pixels[(i_r * piece_size + k) * image_width
+                                                    + i_c * piece_size
+                                                    + piece_size
+                                                    - 1][c]
+                                                    - rgb_pixels[(i_r * piece_size + k)
                                                         * image_width
                                                         + i_c * piece_size
                                                         + piece_size
-                                                        - 1][c]
-                                                        - rgb_pixels[(i_r * piece_size + k)
-                                                            * image_width
-                                                            + i_c * piece_size
-                                                            + piece_size
-                                                            - 2][c])
-                                                        as f32
-                                                })
-                                                .collect::<Vec<_>>()
+                                                        - 2][c])
+                                                    as f32
+                                            })
                                         })
                                         .collect::<Vec<_>>();
                                     // Градиент из последнего столбца i-й детали в первый столбец j-й детали
                                     let grad_lr = (0..piece_size)
-                                        .flat_map(|k| {
-                                            (0..3)
-                                                .map(|c| {
-                                                    (rgb_pixels[(j_r * piece_size + k)
+                                        .map(|k| {
+                                            [0, 1, 2].map(|c| {
+                                                (rgb_pixels[(j_r * piece_size + k) * image_width
+                                                    + j_c * piece_size][c]
+                                                    - rgb_pixels[(i_r * piece_size + k)
                                                         * image_width
-                                                        + j_c * piece_size][c]
-                                                        - rgb_pixels[(i_r * piece_size + k)
-                                                            * image_width
-                                                            + i_c * piece_size
-                                                            + piece_size
-                                                            - 1][c])
-                                                        as f32
-                                                })
-                                                .collect::<Vec<_>>()
+                                                        + i_c * piece_size
+                                                        + piece_size
+                                                        - 1][c])
+                                                    as f32
+                                            })
                                         })
                                         .collect::<Vec<_>>();
                                     // Градиент из первого столбца j-й детали в последний столбец i-й детали
-                                    let grad_rl = grad_lr.iter().map(|x| -x).collect::<Vec<_>>();
+                                    let grad_rl = grad_lr
+                                        .iter()
+                                        .map(|x: &[f32; 3]| [-x[0], -x[1], -x[2]])
+                                        .collect::<Vec<_>>();
                                     // Градиент из второго столбца j-й детали в её первый столбец
                                     let grad_r = (0..piece_size)
-                                        .flat_map(|k| {
-                                            (0..3)
-                                                .map(|c| {
-                                                    (rgb_pixels[(j_r * piece_size + k)
+                                        .map(|k| {
+                                            [0, 1, 2].map(|c| {
+                                                (rgb_pixels[(j_r * piece_size + k) * image_width
+                                                    + j_c * piece_size][c]
+                                                    - rgb_pixels[(j_r * piece_size + k)
                                                         * image_width
-                                                        + j_c * piece_size][c]
-                                                        - rgb_pixels[(j_r * piece_size + k)
-                                                            * image_width
-                                                            + j_c * piece_size
-                                                            + 1][c])
-                                                        as f32
-                                                })
-                                                .collect::<Vec<_>>()
+                                                        + j_c * piece_size
+                                                        + 1][c])
+                                                    as f32
+                                            })
                                         })
                                         .collect::<Vec<_>>();
                                     // Вычисление MGC как суммы MGC слева направо и справа налево
@@ -266,61 +261,55 @@ pub fn calculate_mgc(
                                 .map(|j_c| {
                                     // Градиент из предпоследней строки i-й детали в её последнюю строку
                                     let grad_u = (0..piece_size)
-                                        .flat_map(|k| {
-                                            (0..3)
-                                                .map(|c| {
-                                                    (rgb_pixels[(i_r * piece_size + piece_size
-                                                        - 1)
+                                        .map(|k| {
+                                            [0, 1, 2].map(|c| {
+                                                (rgb_pixels[(i_r * piece_size + piece_size - 1)
+                                                    * image_width
+                                                    + i_c * piece_size
+                                                    + k][c]
+                                                    - rgb_pixels[(i_r * piece_size + piece_size
+                                                        - 2)
                                                         * image_width
                                                         + i_c * piece_size
-                                                        + k][c]
-                                                        - rgb_pixels[(i_r * piece_size
-                                                            + piece_size
-                                                            - 2)
-                                                            * image_width
-                                                            + i_c * piece_size
-                                                            + k][c])
-                                                        as f32
-                                                })
-                                                .collect::<Vec<_>>()
+                                                        + k][c])
+                                                    as f32
+                                            })
                                         })
                                         .collect::<Vec<_>>();
                                     // Градиент из последней строки i-й детали в первую строку j-й детали
                                     let grad_ud = (0..piece_size)
-                                        .flat_map(|k| {
-                                            (0..3)
-                                                .map(|c| {
-                                                    (rgb_pixels[j_r * piece_size * image_width
-                                                        + j_c * piece_size
-                                                        + k][c]
-                                                        - rgb_pixels[(i_r * piece_size
-                                                            + piece_size
-                                                            - 1)
-                                                            * image_width
-                                                            + i_c * piece_size
-                                                            + k][c])
-                                                        as f32
-                                                })
-                                                .collect::<Vec<_>>()
+                                        .map(|k| {
+                                            [0, 1, 2].map(|c| {
+                                                (rgb_pixels[j_r * piece_size * image_width
+                                                    + j_c * piece_size
+                                                    + k][c]
+                                                    - rgb_pixels[(i_r * piece_size + piece_size
+                                                        - 1)
+                                                        * image_width
+                                                        + i_c * piece_size
+                                                        + k][c])
+                                                    as f32
+                                            })
                                         })
                                         .collect::<Vec<_>>();
                                     // Градиент из первого столбца j-й детали в последний столбец i-й детали
-                                    let grad_du = grad_ud.iter().map(|x| -x).collect::<Vec<_>>();
+                                    let grad_du = grad_ud
+                                        .iter()
+                                        .map(|x: &[f32; 3]| [-x[0], -x[1], -x[2]])
+                                        .collect::<Vec<_>>();
                                     // Градиент из второй строки j-й детали в её первую строку
                                     let grad_d = (0..piece_size)
-                                        .flat_map(|k| {
-                                            (0..3)
-                                                .map(|c| {
-                                                    (rgb_pixels[j_r * piece_size * image_width
+                                        .map(|k| {
+                                            [0, 1, 2].map(|c| {
+                                                (rgb_pixels[j_r * piece_size * image_width
+                                                    + j_c * piece_size
+                                                    + k][c]
+                                                    - rgb_pixels[(j_r * piece_size + 1)
+                                                        * image_width
                                                         + j_c * piece_size
-                                                        + k][c]
-                                                        - rgb_pixels[(j_r * piece_size + 1)
-                                                            * image_width
-                                                            + j_c * piece_size
-                                                            + k][c])
-                                                        as f32
-                                                })
-                                                .collect::<Vec<_>>()
+                                                        + k][c])
+                                                    as f32
+                                            })
                                         })
                                         .collect::<Vec<_>>();
                                     // Вычисление MGC как суммы MGC сверху вниз и снизу вверх
