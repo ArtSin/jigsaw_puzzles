@@ -1,5 +1,5 @@
 use iced::image::Handle;
-use image::{GenericImage, GenericImageView, ImageBuffer, Pixel, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Pixel, Rgba, RgbaImage};
 use lab::Lab;
 
 use crate::{Solution, NEIGHBOUR_DIRECTIONS};
@@ -130,6 +130,15 @@ pub fn get_solution_image(
         }
     }
     new_image
+}
+
+// Преобразование изображения в цветовое пространство RGB
+pub fn get_rgb_image(image: &RgbaImage) -> Vec<Vec<f32>> {
+    DynamicImage::ImageRgba8(image.clone())
+        .to_rgb32f()
+        .chunks_exact(3)
+        .map(|v| v.to_vec())
+        .collect()
 }
 
 // Преобразование изображения в цветовое пространство L*a*b*

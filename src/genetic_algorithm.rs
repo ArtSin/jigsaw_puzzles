@@ -9,7 +9,7 @@ use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
 };
 
-use crate::{chromosome_dissimilarity, generate_random_solution, Solution};
+use crate::{generate_random_solution, solution_compatibility, Solution};
 
 const ELITISM_COUNT: usize = 4;
 const MUTATION_RATE_1: f32 = 0.001;
@@ -18,11 +18,11 @@ const MUTATION_RATE_3: f32 = 0.005;
 // Нахождение "лучших приятелей"
 pub fn find_best_buddies(
     img_width: usize,
-    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
+    pieces_compatibility: &[Vec<Vec<f32>>; 2],
 ) -> [Vec<(usize, usize)>; 4] {
     // Нахождение приятелей справа и снизу от детали
     let get_buddies = |ind: usize| {
-        pieces_dissimilarity[ind]
+        pieces_compatibility[ind]
             .par_iter()
             .enumerate()
             .map(|(i, v)| {
@@ -40,10 +40,10 @@ pub fn find_best_buddies(
 
     // Нахождение приятелей слева и сверху от детали
     let get_opposite_buddies = |ind: usize| {
-        (0..pieces_dissimilarity[ind].len())
+        (0..pieces_compatibility[ind].len())
             .into_par_iter()
             .map(|i| {
-                pieces_dissimilarity[ind]
+                pieces_compatibility[ind]
                     .iter()
                     .enumerate()
                     .map(|(j, v)| (j, v[i]))
@@ -64,7 +64,7 @@ pub fn find_best_buddies(
 fn chromosomes_crossover(
     img_width: usize,
     img_height: usize,
-    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
+    pieces_compatibility: &[Vec<Vec<f32>>; 2],
     pieces_buddies: &[Vec<(usize, usize)>; 4],
     chromosome_1: &Solution,
     chromosome_2: &Solution,
@@ -533,7 +533,7 @@ fn chromosomes_crossover(
                     let mut res = 0.0f32;
                     // Обработка детали слева
                     if left_piece_r != usize::MAX {
-                        res += pieces_dissimilarity[0][left_piece_r * img_width + left_piece_c]
+                        res += pieces_compatibility[0][left_piece_r * img_width + left_piece_c]
                             [piece_r * img_width + piece_c];
                         if res >= best_dissimilarity {
                             continue;
@@ -541,7 +541,7 @@ fn chromosomes_crossover(
                     }
                     // Обработка детали справа
                     if right_piece_r != usize::MAX {
-                        res += pieces_dissimilarity[0][piece_r * img_width + piece_c]
+                        res += pieces_compatibility[0][piece_r * img_width + piece_c]
                             [right_piece_r * img_width + right_piece_c];
                         if res >= best_dissimilarity {
                             continue;
@@ -549,7 +549,7 @@ fn chromosomes_crossover(
                     }
                     // Обработка детали сверху
                     if up_piece_r != usize::MAX {
-                        res += pieces_dissimilarity[1][up_piece_r * img_width + up_piece_c]
+                        res += pieces_compatibility[1][up_piece_r * img_width + up_piece_c]
                             [piece_r * img_width + piece_c];
                         if res >= best_dissimilarity {
                             continue;
@@ -557,7 +557,7 @@ fn chromosomes_crossover(
                     }
                     // Обработка детали снизу
                     if down_piece_r != usize::MAX {
-                        res += pieces_dissimilarity[1][piece_r * img_width + piece_c]
+                        res += pieces_compatibility[1][piece_r * img_width + piece_c]
                             [down_piece_r * img_width + down_piece_c];
                         if res >= best_dissimilarity {
                             continue;
@@ -806,7 +806,7 @@ pub fn algorithm_step(
     img_width: usize,
     img_height: usize,
     image_generations_processed: usize,
-    pieces_dissimilarity: &[Vec<Vec<f32>>; 2],
+    pieces_compatibility: &[Vec<Vec<f32>>; 2],
     pieces_buddies: &[Vec<(usize, usize)>; 4],
     current_generation: &[Solution],
 ) -> Vec<Solution> {
@@ -825,33 +825,38 @@ pub fn algorithm_step(
 
         let indexes: Vec<usize> = (0..population_size).collect();
         // Оценки хромосом текущего поколения
-        let curr_gen_dissimilarities: Vec<_> = current_generation
+        let curr_gen_compatibilities: Vec<_> = current_generation
             .iter()
             .map(|chromosome| {
-                chromosome_dissimilarity(img_width, img_height, pieces_dissimilarity, chromosome)
+                solution_compatibility(img_width, img_height, pieces_compatibility, chromosome)
             })
             .collect();
         // Наименьшая оценка
-        let min_dissimilarity = curr_gen_dissimilarities
+        let min_compatibility = curr_gen_compatibilities
             .iter()
             .cloned()
             .reduce(f32::min)
             .unwrap();
         // Наибольшая оценка
-        let max_dissimilarity = curr_gen_dissimilarities
+        let max_compatibility = curr_gen_compatibilities
             .iter()
             .cloned()
             .reduce(f32::max)
             .unwrap();
-        println!("{}, {}", min_dissimilarity, max_dissimilarity);
+        // Разность оценок
+        let diff_compatibility = if min_compatibility == max_compatibility {
+            1.0
+        } else {
+            max_compatibility - min_compatibility
+        };
+        println!("{}, {}", min_compatibility, max_compatibility);
 
         // Выбранные для скрещивания предки
         let parents: Vec<_> = (0..(population_size - ELITISM_COUNT))
             .map(|_| {
                 let mut iter = indexes
                     .choose_multiple_weighted(rng, 2, |i| {
-                        (-(curr_gen_dissimilarities[*i] - min_dissimilarity)
-                            / (max_dissimilarity - min_dissimilarity))
+                        (-(curr_gen_compatibilities[*i] - min_compatibility) / diff_compatibility)
                             * 0.9
                             + 0.95
                     })
@@ -875,7 +880,7 @@ pub fn algorithm_step(
                 chromosomes_crossover(
                     img_width,
                     img_height,
-                    pieces_dissimilarity,
+                    pieces_compatibility,
                     pieces_buddies,
                     &current_generation[i],
                     &current_generation[j],
@@ -890,10 +895,10 @@ pub fn algorithm_step(
     };
     // Сортировка хромосом по возрастанию оценки
     new_generation.sort_by_cached_key(|chromosome| {
-        FloatOrd(chromosome_dissimilarity(
+        FloatOrd(solution_compatibility(
             img_width,
             img_height,
-            pieces_dissimilarity,
+            pieces_compatibility,
             chromosome,
         ))
     });

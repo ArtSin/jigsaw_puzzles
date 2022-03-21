@@ -3,7 +3,7 @@ use std::{error::Error, fmt::Display, sync::Arc};
 use iced::Command;
 use image::RgbaImage;
 use jigsaw_puzzles::{
-    calculate_dissimilarities,
+    calculate_dissimilarities, calculate_mgc,
     genetic_algorithm::{algorithm_step, find_best_buddies},
     Solution,
 };
@@ -177,7 +177,8 @@ pub fn algorithm_next(
             }
             // Подготовка - вычисление совместимостей деталей
             if !request.image_prepared {
-                let pieces_dissimilarity = calculate_dissimilarities(
+                let pieces_dissimilarity = calculate_mgc(
+                    //calculate_dissimilarities(
                     &images[request.images_processed],
                     request.img_width,
                     request.img_height,
