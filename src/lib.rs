@@ -54,10 +54,12 @@ pub fn calculate_dissimilarities(
                                     (0..piece_size)
                                         .map(|k| {
                                             two_pixels_dissimilarity(
+                                                // k-й элемент последнего столбца i-й детали
                                                 (i_r * piece_size + k) * image_width
                                                     + i_c * piece_size
                                                     + piece_size
                                                     - 1,
+                                                // k-й элемент первого столбца j-й детали
                                                 (j_r * piece_size + k) * image_width
                                                     + j_c * piece_size,
                                             )
@@ -86,9 +88,11 @@ pub fn calculate_dissimilarities(
                                     (0..piece_size)
                                         .map(|k| {
                                             two_pixels_dissimilarity(
+                                                // k-й элемент последней строки i-й детали
                                                 (i_r * piece_size + piece_size - 1) * image_width
                                                     + i_c * piece_size
                                                     + k,
+                                                // k-й элемент первой строки j-й детали
                                                 j_r * piece_size * image_width
                                                     + j_c * piece_size
                                                     + k,
@@ -119,12 +123,16 @@ pub fn calculate_mgc(
     // Ширина изображения в пикселях
     let image_width = img_width * piece_size;
 
+    // Вычисление MGC для одной стороны (по градиентам в одной из деталей и градиенту между ними)
     let calc_mgc_part = |grad_side: Vec<[f32; 3]>, grad_mid: Vec<[f32; 3]>| {
         const EPS: f32 = 1e-6;
 
         let sz = grad_side.len() as f32;
+        // Средний градиент по каждому цветовому каналу
         let means = [0, 1, 2].map(|i| grad_side.iter().map(|v| v[i]).sum::<f32>() / sz);
+        // Коэффициент ковариации
         let cov_denom = 1.0 / (sz - 1.0);
+        // Вычисление ковариации для разных величин
         let get_cov = |i, j| {
             grad_side
                 .iter()
@@ -132,6 +140,7 @@ pub fn calculate_mgc(
                 .sum::<f32>()
                 * cov_denom
         };
+        // Вычисление ковариации величины с самой собой (дисперсии)
         let get_cov_sqr = |i: usize| {
             grad_side
                 .iter()
@@ -139,38 +148,57 @@ pub fn calculate_mgc(
                 .sum::<f32>()
                 * cov_denom
         };
+        // Матрица ковариаций между градиентами по каждому цветовому каналу:
+        // [[a b c]]
+        // [[d e f]]
+        // [[g h i]]
+        // Так как она симметрична, то d = b, g = c, h = f, и они не вычисляются
+        // К элементам на диагонали добавляется EPS для численной стабильности инвертирования матрицы
         let a = get_cov_sqr(0) + EPS;
         let e = get_cov_sqr(1) + EPS;
         let i = get_cov_sqr(2) + EPS;
         let b = get_cov(0, 1);
         let c = get_cov(0, 2);
         let f = get_cov(1, 2);
+        // Вычисление обратной к матрице ковариаций:
+        //               1                    [[(ei - fh) (ch - bi) (bf - ce)]]
+        // ---------------------------------  [[(fg - di) (ai - cg) (cd - af)]]
+        // a * ei_ff + b * cf_bi + c * bf_ce  [[(dh - eg) (bg - ah) (ae - bd)]]
+        // Элементы матрицы (d, g, h заменены)
         let ei_ff = e * i - f * f;
         let cf_bi = c * f - b * i;
         let bf_ce = b * f - c * e;
         let bc_af = b * c - a * f;
+        let ai_cc = a * i - c * c;
+        let ae_bb = a * e - b * b;
+        // Коэффициент обратной матрицы
         let denom = 1.0 / (a * ei_ff + b * cf_bi + c * bf_ce);
-        let covs_inv = [
-            ei_ff * denom,
-            cf_bi * denom,
-            bf_ce * denom,
-            cf_bi * denom,
-            (a * i - c * c) * denom,
-            bc_af * denom,
-            bf_ce * denom,
-            bc_af * denom,
-            (a * e - b * b) * denom,
-        ];
+        // Умножение на коэффициент и на 2 (при необходимости для следующих формул)
+        let ei_ff = ei_ff * denom;
+        let cf_bi = 2.0 * (cf_bi * denom);
+        let bf_ce = 2.0 * (bf_ce * denom);
+        let bc_af = 2.0 * (bc_af * denom);
+        let ai_cc = ai_cc * denom;
+        let ae_bb = ae_bb * denom;
+        // Разность между градиентом из одной детали в другую и средним градиентом в детали
         let grad_diff: Vec<_> = grad_mid
             .iter()
             .map(|v| [v[0] - means[0], v[1] - means[1], v[2] - means[2]])
             .collect();
+        // Вычисление результата (. - умножение матриц):
+        // sz
+        //  ∑ grad_diff[i] . covariations_inv . (grad_diff[i])^T
+        // i=0
+        // Можно преобразовать как сумму элементов матрицы вида (* - поточечное умножение):
+        // grad_diff . covariations_inv * grad_diff
+        // Эта формула вычисляется построчно для grad_diff и подставляются элементы матрицы,
+        // обратной к матрице ковариаций
         let res = grad_diff
             .iter()
             .map(|v| {
-                (0..3)
-                    .map(|j| (0..3).map(|k| v[k] * covs_inv[3 * k + j]).sum::<f32>() * v[j])
-                    .sum::<f32>()
+                (v[0] * ei_ff + v[1] * cf_bi + v[2] * bf_ce) * v[0]
+                    + (v[1] * ai_cc + v[2] * bc_af) * v[1]
+                    + ae_bb * v[2] * v[2]
             })
             .sum::<f32>();
         f32::max(0.0, res).sqrt()
