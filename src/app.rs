@@ -238,17 +238,17 @@ impl AppState {
 
         let algorithm_data =
             AlgorithmDataRequest::Genetic(genetic_algorithm::AlgorithmDataRequest {
+                compatibility_measure: self.compatibility_measure,
                 piece_size: self.piece_size,
                 generations_count: self.generations_count,
                 population_size: self.population_size,
                 rng: Xoshiro256PlusPlus::seed_from_u64(self.rand_seed),
                 img_width,
                 img_height,
-                compatibility_measure: self.compatibility_measure,
                 images_processed: 0,
                 image_generations_processed: 0,
                 image_prepared: false,
-                pieces_dissimilarity: Arc::new([Vec::new(), Vec::new()]),
+                pieces_compatibility: Arc::new([Vec::new(), Vec::new()]),
                 pieces_buddies: Arc::new([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
                 current_generation: Arc::new(Vec::new()),
             });

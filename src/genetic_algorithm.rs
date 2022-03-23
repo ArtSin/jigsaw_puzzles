@@ -510,7 +510,7 @@ fn chromosomes_crossover(
                 };
 
                 // Наименьшая несовместимость
-                let mut best_dissimilarity = f32::INFINITY;
+                let mut best_compatibility = f32::INFINITY;
                 // "Лучшие приятели"
                 let mut buddies = Vec::new();
                 if left_piece_r != usize::MAX {
@@ -535,7 +535,7 @@ fn chromosomes_crossover(
                     if left_piece_r != usize::MAX {
                         res += pieces_compatibility[0][left_piece_r * img_width + left_piece_c]
                             [piece_r * img_width + piece_c];
-                        if res >= best_dissimilarity {
+                        if res >= best_compatibility {
                             continue;
                         }
                     }
@@ -543,7 +543,7 @@ fn chromosomes_crossover(
                     if right_piece_r != usize::MAX {
                         res += pieces_compatibility[0][piece_r * img_width + piece_c]
                             [right_piece_r * img_width + right_piece_c];
-                        if res >= best_dissimilarity {
+                        if res >= best_compatibility {
                             continue;
                         }
                     }
@@ -551,7 +551,7 @@ fn chromosomes_crossover(
                     if up_piece_r != usize::MAX {
                         res += pieces_compatibility[1][up_piece_r * img_width + up_piece_c]
                             [piece_r * img_width + piece_c];
-                        if res >= best_dissimilarity {
+                        if res >= best_compatibility {
                             continue;
                         }
                     }
@@ -559,14 +559,14 @@ fn chromosomes_crossover(
                     if down_piece_r != usize::MAX {
                         res += pieces_compatibility[1][piece_r * img_width + piece_c]
                             [down_piece_r * img_width + down_piece_c];
-                        if res >= best_dissimilarity {
+                        if res >= best_compatibility {
                             continue;
                         }
                     }
 
                     // Обновление наименее несовместимой детали
                     best_piece = (*piece_r, *piece_c);
-                    best_dissimilarity = res;
+                    best_compatibility = res;
                 }
             }
 
