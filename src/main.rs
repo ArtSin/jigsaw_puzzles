@@ -1,8 +1,8 @@
 use app::AppState;
 use iced::{window, Application, Settings};
 
+pub mod algorithms_async;
 pub mod app;
-pub mod genetic_algorithm_async;
 
 fn main() -> iced::Result {
     let settings = Settings {

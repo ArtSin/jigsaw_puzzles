@@ -4,10 +4,11 @@ use iced::{
 };
 use iced_aw::{modal, number_input, Card, Modal, NumberInput};
 
+use crate::algorithms_async::{AlgorithmData, AlgorithmState, CompatibilityMeasure};
+
 use super::{
     images_loader::LoadImagesState, AppMessage, AppState, ErrorModalMessage, ErrorModalState,
 };
-use crate::genetic_algorithm_async::{AlgorithmData, AlgorithmState};
 
 #[derive(Default)]
 pub struct AppUIState {
@@ -93,15 +94,17 @@ impl Application for AppState {
                     }
                     LoadImagesState::Loaded(_) => String::from("изображения загружены"),
                 },
-                AlgorithmState::Running(algorithm_data) => match &self.load_images_state {
-                    LoadImagesState::Loaded(images_data) => format!(
-                        "обработка изображения {}/{}, поколение {}/{}",
-                        algorithm_data.images_processed + 1,
-                        images_data.images.len(),
-                        algorithm_data.image_generations_processed + 1,
-                        self.generations_count
-                    ),
-                    _ => unreachable!(),
+                AlgorithmState::Running(algorithm_data) => match algorithm_data {
+                    AlgorithmData::Genetic(algorithm_data) => match &self.load_images_state {
+                        LoadImagesState::Loaded(images_data) => format!(
+                            "обработка изображения {}/{}, поколение {}/{}",
+                            algorithm_data.images_processed + 1,
+                            images_data.images.len(),
+                            algorithm_data.image_generations_processed + 1,
+                            self.generations_count
+                        ),
+                        _ => unreachable!(),
+                    },
                 },
                 AlgorithmState::Finished(_) => String::from("алгоритм выполнен"),
             }
@@ -130,6 +133,19 @@ impl Application for AppState {
                     _ => button,
                 }
             })
+            .push(Text::new("Метод сравнения деталей:"))
+            .push(Radio::new(
+                CompatibilityMeasure::Dissimilarity,
+                "Несходство",
+                Some(self.compatibility_measure),
+                AppMessage::CompatibilityMeasureToggled,
+            ))
+            .push(Radio::new(
+                CompatibilityMeasure::MGC,
+                "MGC",
+                Some(self.compatibility_measure),
+                AppMessage::CompatibilityMeasureToggled,
+            ))
             .push(Text::new("Размер детали:"))
             .push(
                 NumberInput::new(
@@ -231,9 +247,11 @@ impl Application for AppState {
 
         if self.ui.main_image_selected_image.is_some() {
             let gen_cnt = match &self.algorithm_state {
-                AlgorithmState::Finished(AlgorithmData {
-                    best_chromosomes, ..
-                }) => best_chromosomes[self.ui.main_image_selected_image.unwrap()].len(),
+                AlgorithmState::Finished(algorithm_data) => match algorithm_data {
+                    AlgorithmData::Genetic(algorithm_data) => algorithm_data.best_chromosomes
+                        [self.ui.main_image_selected_image.unwrap()]
+                    .len(),
+                },
                 _ => unreachable!(),
             };
 

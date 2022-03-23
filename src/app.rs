@@ -16,15 +16,16 @@ use self::{
         LoadImagesState,
     },
 };
-use crate::genetic_algorithm_async::{
-    algorithm_next, AlgorithmData, AlgorithmDataRequest, AlgorithmError, AlgorithmMessage,
-    AlgorithmState,
+use crate::algorithms_async::{
+    algorithm_next, genetic_algorithm, AlgorithmData, AlgorithmDataRequest, AlgorithmError,
+    AlgorithmMessage, AlgorithmState, CompatibilityMeasure,
 };
 
 mod app_ui;
 mod images_loader;
 
 pub struct AppState {
+    compatibility_measure: CompatibilityMeasure,
     piece_size: u32,
     generations_count: usize,
     population_size: usize,
@@ -44,6 +45,7 @@ pub enum AppMessage {
     StartAlgorithmPressed,
     SaveResultsPressed,
     SaveImagePressed,
+    CompatibilityMeasureToggled(CompatibilityMeasure),
     ShowIncorrectPiecesCheckboxToggled(bool),
     ShowIncorrectDirectNeighbourToggled(bool),
     FirstGenerationPressed,
@@ -77,6 +79,7 @@ pub enum ErrorModalMessage {
 impl Default for AppState {
     fn default() -> Self {
         Self {
+            compatibility_measure: CompatibilityMeasure::Dissimilarity,
             piece_size: 28,
             generations_count: 100,
             population_size: 100,
@@ -132,33 +135,37 @@ impl AppState {
         }
         writeln!(writer)?;
 
-        for gen in 0..algorithm_data.generations_count {
-            for image_i in 0..algorithm_data.images_processed {
-                write!(
-                    writer,
-                    "{:.2},",
-                    image_direct_comparison(
-                        algorithm_data.img_width,
-                        &algorithm_data.best_chromosomes[image_i][gen]
-                    )
-                )?;
-            }
-            for image_i in 0..algorithm_data.images_processed {
-                write!(
-                    writer,
-                    "{:.2}",
-                    image_neighbour_comparison(
-                        algorithm_data.img_width,
-                        algorithm_data.img_height,
-                        &algorithm_data.best_chromosomes[image_i][gen]
-                    )
-                )?;
-                if image_i != images_data.loaded - 1 {
-                    write!(writer, ",")?;
+        match algorithm_data {
+            AlgorithmData::Genetic(algorithm_data) => {
+                for gen in 0..algorithm_data.generations_count {
+                    for image_i in 0..algorithm_data.images_processed {
+                        write!(
+                            writer,
+                            "{:.2},",
+                            image_direct_comparison(
+                                algorithm_data.img_width,
+                                &algorithm_data.best_chromosomes[image_i][gen]
+                            )
+                        )?;
+                    }
+                    for image_i in 0..algorithm_data.images_processed {
+                        write!(
+                            writer,
+                            "{:.2}",
+                            image_neighbour_comparison(
+                                algorithm_data.img_width,
+                                algorithm_data.img_height,
+                                &algorithm_data.best_chromosomes[image_i][gen]
+                            )
+                        )?;
+                        if image_i != images_data.loaded - 1 {
+                            write!(writer, ",")?;
+                        }
+                    }
+                    writeln!(writer)?;
                 }
             }
-            writeln!(writer)?;
-        }
+        };
 
         Ok(Command::none())
     }
@@ -185,15 +192,17 @@ impl AppState {
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
-        let image = get_solution_image(
-            &images_data.images[image_i],
-            self.piece_size,
-            algorithm_data.img_width,
-            algorithm_data.img_height,
-            &algorithm_data.best_chromosomes[image_i][gen],
-            self.ui.show_incorrect_pieces,
-            self.ui.show_incorrect_direct_neighbour,
-        );
+        let image = match algorithm_data {
+            AlgorithmData::Genetic(algorithm_data) => get_solution_image(
+                &images_data.images[image_i],
+                self.piece_size,
+                algorithm_data.img_width,
+                algorithm_data.img_height,
+                &algorithm_data.best_chromosomes[image_i][gen],
+                self.ui.show_incorrect_pieces,
+                self.ui.show_incorrect_direct_neighbour,
+            ),
+        };
         image.save(file_path_option.unwrap())?;
         Ok(Command::none())
     }
@@ -227,20 +236,22 @@ impl AppState {
             (image_height / self.piece_size) as usize,
         );
 
-        let algorithm_data = AlgorithmDataRequest {
-            piece_size: self.piece_size,
-            generations_count: self.generations_count,
-            population_size: self.population_size,
-            rng: Xoshiro256PlusPlus::seed_from_u64(self.rand_seed),
-            img_width,
-            img_height,
-            images_processed: 0,
-            image_generations_processed: 0,
-            image_prepared: false,
-            pieces_dissimilarity: Arc::new([Vec::new(), Vec::new()]),
-            pieces_buddies: Arc::new([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
-            current_generation: Arc::new(Vec::new()),
-        };
+        let algorithm_data =
+            AlgorithmDataRequest::Genetic(genetic_algorithm::AlgorithmDataRequest {
+                piece_size: self.piece_size,
+                generations_count: self.generations_count,
+                population_size: self.population_size,
+                rng: Xoshiro256PlusPlus::seed_from_u64(self.rand_seed),
+                img_width,
+                img_height,
+                compatibility_measure: self.compatibility_measure,
+                images_processed: 0,
+                image_generations_processed: 0,
+                image_prepared: false,
+                pieces_dissimilarity: Arc::new([Vec::new(), Vec::new()]),
+                pieces_buddies: Arc::new([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
+                current_generation: Arc::new(Vec::new()),
+            });
 
         Ok(Command::perform(async {}, move |_| {
             AppMessage::AlgorithmMessage(AlgorithmMessage::Initialization(algorithm_data.clone()))
@@ -259,25 +270,29 @@ impl AppState {
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
-        let new_image = get_solution_image(
-            &images_data.images[image_i],
-            self.piece_size,
-            algorithm_data.img_width,
-            algorithm_data.img_height,
-            &algorithm_data.best_chromosomes[image_i][gen],
-            self.ui.show_incorrect_pieces,
-            self.ui.show_incorrect_direct_neighbour,
-        );
-        self.ui.main_image_handle = Some(get_image_handle(&new_image));
-        self.ui.main_image_direct_comparison = image_direct_comparison(
-            algorithm_data.img_width,
-            &algorithm_data.best_chromosomes[image_i][gen],
-        );
-        self.ui.main_image_neighbour_comparison = image_neighbour_comparison(
-            algorithm_data.img_width,
-            algorithm_data.img_height,
-            &algorithm_data.best_chromosomes[image_i][gen],
-        );
+        match algorithm_data {
+            AlgorithmData::Genetic(algorithm_data) => {
+                let new_image = get_solution_image(
+                    &images_data.images[image_i],
+                    self.piece_size,
+                    algorithm_data.img_width,
+                    algorithm_data.img_height,
+                    &algorithm_data.best_chromosomes[image_i][gen],
+                    self.ui.show_incorrect_pieces,
+                    self.ui.show_incorrect_direct_neighbour,
+                );
+                self.ui.main_image_handle = Some(get_image_handle(&new_image));
+                self.ui.main_image_direct_comparison = image_direct_comparison(
+                    algorithm_data.img_width,
+                    &algorithm_data.best_chromosomes[image_i][gen],
+                );
+                self.ui.main_image_neighbour_comparison = image_neighbour_comparison(
+                    algorithm_data.img_width,
+                    algorithm_data.img_height,
+                    &algorithm_data.best_chromosomes[image_i][gen],
+                );
+            }
+        };
         Ok(Command::none())
     }
 
@@ -290,6 +305,10 @@ impl AppState {
             AppMessage::StartAlgorithmPressed => self.algorithm_start(),
             AppMessage::SaveResultsPressed => self.save_results(),
             AppMessage::SaveImagePressed => self.save_image(),
+            AppMessage::CompatibilityMeasureToggled(x) => {
+                self.compatibility_measure = x;
+                Ok(Command::none())
+            }
             AppMessage::ShowIncorrectPiecesCheckboxToggled(x) => {
                 self.ui.show_incorrect_pieces = x;
                 self.load_selected_image()

@@ -1,15 +1,16 @@
-use std::{error::Error, fmt::Display, sync::Arc};
+use std::{error::Error, sync::Arc};
 
 use iced::Command;
 use image::RgbaImage;
 use jigsaw_puzzles::{
-    calculate_dissimilarities, calculate_mgc,
     genetic_algorithm::{algorithm_step, find_best_buddies},
     Solution,
 };
 use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::app::AppMessage;
+
+use super::{AlgorithmMessage, CompatibilityMeasure};
 
 #[derive(Debug, Clone)]
 pub struct AlgorithmDataRequest {
@@ -19,6 +20,7 @@ pub struct AlgorithmDataRequest {
     pub rng: Xoshiro256PlusPlus,
     pub img_width: usize,
     pub img_height: usize,
+    pub compatibility_measure: CompatibilityMeasure,
     pub images_processed: usize,
     pub image_generations_processed: usize,
     pub image_prepared: bool,
@@ -46,6 +48,7 @@ pub struct AlgorithmData {
     pub rng: Xoshiro256PlusPlus,
     pub img_width: usize,
     pub img_height: usize,
+    pub compatibility_measure: CompatibilityMeasure,
     pub images_processed: usize,
     pub image_generations_processed: usize,
     pub pieces_dissimilarity: Arc<[Vec<Vec<f32>>; 2]>,
@@ -63,6 +66,7 @@ impl AlgorithmData {
             rng: self.rng.clone(),
             img_width: self.img_width,
             img_height: self.img_height,
+            compatibility_measure: self.compatibility_measure,
             images_processed: self.images_processed,
             image_generations_processed: self.image_generations_processed,
             image_prepared: !self.pieces_dissimilarity[0].is_empty(),
@@ -80,6 +84,7 @@ impl AlgorithmData {
             rng: request.rng,
             img_width: request.img_width,
             img_height: request.img_height,
+            compatibility_measure: request.compatibility_measure,
             images_processed: request.images_processed,
             image_generations_processed: request.image_generations_processed,
             pieces_dissimilarity: request.pieces_dissimilarity,
@@ -111,40 +116,6 @@ impl AlgorithmData {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum AlgorithmState {
-    NotStarted,
-    Running(AlgorithmData),
-    Finished(AlgorithmData),
-}
-
-#[derive(Debug, Clone)]
-pub enum AlgorithmMessage {
-    Initialization(AlgorithmDataRequest),
-    Update(AlgorithmDataResponse),
-    Finished(AlgorithmDataResponse),
-    Error(String),
-}
-
-#[derive(Debug)]
-pub enum AlgorithmError {
-    NoImages,
-    NotEqualDimensions,
-    IncorrectPieceSize,
-}
-
-impl Display for AlgorithmError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NoImages => write!(f, "Нет изображений!"),
-            Self::NotEqualDimensions => write!(f, "У изображений не одинаковые размеры!"),
-            Self::IncorrectPieceSize => write!(f, "Неправильный размер детали!"),
-        }
-    }
-}
-
-impl Error for AlgorithmError {}
-
 pub fn algorithm_next(
     images: Arc<Vec<RgbaImage>>,
     mut request: AlgorithmDataRequest,
@@ -153,47 +124,52 @@ pub fn algorithm_next(
         let res = || {
             // Все изображения обработаны
             if request.images_processed == images.len() {
-                return Ok(AlgorithmMessage::Finished(AlgorithmDataResponse {
-                    rng: request.rng,
-                    images_processed: request.images_processed,
-                    image_generations_processed: request.image_generations_processed,
-                    pieces_dissimilarity: None,
-                    pieces_buddies: None,
-                    current_generation: None,
-                    best_chromosome: None,
-                }));
+                return Ok(AlgorithmMessage::Finished(
+                    super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
+                        rng: request.rng,
+                        images_processed: request.images_processed,
+                        image_generations_processed: request.image_generations_processed,
+                        pieces_dissimilarity: None,
+                        pieces_buddies: None,
+                        current_generation: None,
+                        best_chromosome: None,
+                    }),
+                ));
             }
             // Все поколения изображения обработаны
             if request.image_generations_processed == request.generations_count {
-                return Ok(AlgorithmMessage::Update(AlgorithmDataResponse {
-                    rng: request.rng,
-                    images_processed: request.images_processed + 1,
-                    image_generations_processed: 0,
-                    pieces_dissimilarity: Some([Vec::new(), Vec::new()]),
-                    pieces_buddies: Some([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
-                    current_generation: None,
-                    best_chromosome: None,
-                }));
+                return Ok(AlgorithmMessage::Update(
+                    super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
+                        rng: request.rng,
+                        images_processed: request.images_processed + 1,
+                        image_generations_processed: 0,
+                        pieces_dissimilarity: Some([Vec::new(), Vec::new()]),
+                        pieces_buddies: Some([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
+                        current_generation: None,
+                        best_chromosome: None,
+                    }),
+                ));
             }
             // Подготовка - вычисление совместимостей деталей
             if !request.image_prepared {
-                let pieces_dissimilarity = calculate_mgc(
-                    //calculate_dissimilarities(
+                let pieces_dissimilarity = request.compatibility_measure.calculate(
                     &images[request.images_processed],
                     request.img_width,
                     request.img_height,
                     request.piece_size as usize,
                 );
                 let pieces_buddies = find_best_buddies(request.img_width, &pieces_dissimilarity);
-                return Ok(AlgorithmMessage::Update(AlgorithmDataResponse {
-                    rng: request.rng,
-                    images_processed: request.images_processed,
-                    image_generations_processed: request.image_generations_processed,
-                    pieces_dissimilarity: Some(pieces_dissimilarity),
-                    pieces_buddies: Some(pieces_buddies),
-                    current_generation: None,
-                    best_chromosome: None,
-                }));
+                return Ok(AlgorithmMessage::Update(
+                    super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
+                        rng: request.rng,
+                        images_processed: request.images_processed,
+                        image_generations_processed: request.image_generations_processed,
+                        pieces_dissimilarity: Some(pieces_dissimilarity),
+                        pieces_buddies: Some(pieces_buddies),
+                        current_generation: None,
+                        best_chromosome: None,
+                    }),
+                ));
             }
 
             let new_generation = algorithm_step(
@@ -207,15 +183,17 @@ pub fn algorithm_next(
                 &request.current_generation,
             );
 
-            Ok::<_, Box<dyn Error>>(AlgorithmMessage::Update(AlgorithmDataResponse {
-                rng: request.rng,
-                images_processed: request.images_processed,
-                image_generations_processed: request.image_generations_processed + 1,
-                pieces_dissimilarity: None,
-                pieces_buddies: None,
-                best_chromosome: Some(new_generation[0].clone()),
-                current_generation: Some(new_generation),
-            }))
+            Ok::<_, Box<dyn Error>>(AlgorithmMessage::Update(
+                super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
+                    rng: request.rng,
+                    images_processed: request.images_processed,
+                    image_generations_processed: request.image_generations_processed + 1,
+                    pieces_dissimilarity: None,
+                    pieces_buddies: None,
+                    best_chromosome: Some(new_generation[0].clone()),
+                    current_generation: Some(new_generation),
+                }),
+            ))
         };
         match res() {
             Ok(message) => AppMessage::AlgorithmMessage(message),
