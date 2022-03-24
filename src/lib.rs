@@ -7,6 +7,7 @@ use crate::image_processing::get_rgb_image;
 
 pub mod genetic_algorithm;
 pub mod image_processing;
+pub mod loop_constraints_algorithm;
 
 // Решение пазла: двумерный (представлен как одномерный, записан построчно) массив,
 // в каждой позиции которого находится деталь (пара из строки и столбца)
@@ -24,8 +25,9 @@ fn generate_random_solution<T: Rng>(img_width: usize, img_height: usize, rng: &m
     rand_nums
 }
 
-// Вычисление "несходства" деталей
-pub fn calculate_dissimilarities(
+// Вычисление SSD (sum of squared differences, сумма квадратов разностей)
+// в цветовом пространстве L*a*b* для деталей
+pub fn calculate_lab_ssd(
     image: &RgbaImage,
     img_width: usize,
     img_height: usize,
@@ -111,7 +113,7 @@ pub fn calculate_dissimilarities(
     [right_dissimilarity, down_dissimilarity]
 }
 
-// Вычисление MGC (Mahalanobis Gradient Compatibility) для деталей
+// Вычисление MGC (Mahalanobis Gradient Compatibility, совместимость градиентов Махаланобиса) для деталей
 pub fn calculate_mgc(
     image: &RgbaImage,
     img_width: usize,

@@ -4,7 +4,7 @@ use iced::{
 };
 use iced_aw::{modal, number_input, Card, Modal, NumberInput};
 
-use crate::algorithms_async::{AlgorithmData, AlgorithmState, CompatibilityMeasure};
+use crate::algorithms_async::{Algorithm, AlgorithmData, AlgorithmState, CompatibilityMeasure};
 
 use super::{
     images_loader::LoadImagesState, AppMessage, AppState, ErrorModalMessage, ErrorModalState,
@@ -105,6 +105,15 @@ impl Application for AppState {
                         ),
                         _ => unreachable!(),
                     },
+                    AlgorithmData::LoopConstraints(algorithm_data) => match &self.load_images_state
+                    {
+                        LoadImagesState::Loaded(images_data) => format!(
+                            "обработка изображения {}/{}",
+                            algorithm_data.images_processed + 1,
+                            images_data.images.len(),
+                        ),
+                        _ => unreachable!(),
+                    },
                 },
                 AlgorithmState::Finished(_) => String::from("алгоритм выполнен"),
             }
@@ -133,10 +142,23 @@ impl Application for AppState {
                     _ => button,
                 }
             })
+            .push(Text::new("Алгоритм:"))
+            .push(Radio::new(
+                Algorithm::Genetic,
+                "Генетический",
+                Some(self.algorithm),
+                AppMessage::AlgorithmToggled,
+            ))
+            .push(Radio::new(
+                Algorithm::LoopConstraints,
+                "Циклических ограничений",
+                Some(self.algorithm),
+                AppMessage::AlgorithmToggled,
+            ))
             .push(Text::new("Метод сравнения деталей:"))
             .push(Radio::new(
-                CompatibilityMeasure::Dissimilarity,
-                "Несходство",
+                CompatibilityMeasure::LabSSD,
+                "LAB SSD",
                 Some(self.compatibility_measure),
                 AppMessage::CompatibilityMeasureToggled,
             ))
@@ -155,37 +177,42 @@ impl Application for AppState {
                     AppMessage::PieceSizeChanged,
                 )
                 .width(Length::Fill),
-            )
-            .push(Text::new("Количество поколений:"))
-            .push(
-                NumberInput::new(
-                    &mut self.ui.generations_count_number_input,
-                    self.generations_count,
-                    10000,
-                    AppMessage::GenerationsCountChanged,
+            );
+        let menu_column = match self.algorithm {
+            Algorithm::Genetic => menu_column
+                .push(Text::new("Количество поколений:"))
+                .push(
+                    NumberInput::new(
+                        &mut self.ui.generations_count_number_input,
+                        self.generations_count,
+                        10000,
+                        AppMessage::GenerationsCountChanged,
+                    )
+                    .width(Length::Fill),
                 )
-                .width(Length::Fill),
-            )
-            .push(Text::new("Размер популяции:"))
-            .push(
-                NumberInput::new(
-                    &mut self.ui.population_size_number_input,
-                    self.population_size,
-                    10000,
-                    AppMessage::PopulationSizeChanged,
+                .push(Text::new("Размер популяции:"))
+                .push(
+                    NumberInput::new(
+                        &mut self.ui.population_size_number_input,
+                        self.population_size,
+                        10000,
+                        AppMessage::PopulationSizeChanged,
+                    )
+                    .width(Length::Fill),
                 )
-                .width(Length::Fill),
-            )
-            .push(Text::new("Начальное значение ГПСЧ:"))
-            .push(
-                NumberInput::new(
-                    &mut self.ui.rand_seed_number_input,
-                    self.rand_seed,
-                    u64::MAX,
-                    AppMessage::RandSeedChanged,
-                )
-                .width(Length::Fill),
-            )
+                .push(Text::new("Начальное значение ГПСЧ:"))
+                .push(
+                    NumberInput::new(
+                        &mut self.ui.rand_seed_number_input,
+                        self.rand_seed,
+                        u64::MAX,
+                        AppMessage::RandSeedChanged,
+                    )
+                    .width(Length::Fill),
+                ),
+            Algorithm::LoopConstraints => menu_column,
+        };
+        let menu_column = menu_column
             .push({
                 let button = Button::new(
                     &mut self.ui.start_algorithm_button,
@@ -251,6 +278,9 @@ impl Application for AppState {
                     AlgorithmData::Genetic(algorithm_data) => algorithm_data.best_chromosomes
                         [self.ui.main_image_selected_image.unwrap()]
                     .len(),
+                    AlgorithmData::LoopConstraints(algorithm_data) => {
+                        algorithm_data.solutions[self.ui.main_image_selected_image.unwrap()].len()
+                    }
                 },
                 _ => unreachable!(),
             };

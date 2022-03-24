@@ -2,15 +2,22 @@ use std::{error::Error, fmt::Display, sync::Arc};
 
 use iced::Command;
 use image::RgbaImage;
-use jigsaw_puzzles::{calculate_dissimilarities, calculate_mgc};
+use jigsaw_puzzles::{calculate_lab_ssd, calculate_mgc};
 
 use crate::app::AppMessage;
 
 pub mod genetic_algorithm;
+pub mod loop_constraints_algorithm;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Algorithm {
+    Genetic,
+    LoopConstraints,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompatibilityMeasure {
-    Dissimilarity,
+    LabSSD,
     MGC,
 }
 
@@ -23,9 +30,7 @@ impl CompatibilityMeasure {
         piece_size: usize,
     ) -> [Vec<Vec<f32>>; 2] {
         match self {
-            Self::Dissimilarity => {
-                calculate_dissimilarities(image, img_width, img_height, piece_size)
-            }
+            Self::LabSSD => calculate_lab_ssd(image, img_width, img_height, piece_size),
             Self::MGC => calculate_mgc(image, img_width, img_height, piece_size),
         }
     }
@@ -34,16 +39,19 @@ impl CompatibilityMeasure {
 #[derive(Debug, Clone)]
 pub enum AlgorithmDataRequest {
     Genetic(genetic_algorithm::AlgorithmDataRequest),
+    LoopConstraints(loop_constraints_algorithm::AlgorithmDataRequest),
 }
 
 #[derive(Debug, Clone)]
 pub enum AlgorithmDataResponse {
     Genetic(genetic_algorithm::AlgorithmDataResponse),
+    LoopConstraints(loop_constraints_algorithm::AlgorithmDataResponse),
 }
 
 #[derive(Debug, Clone)]
 pub enum AlgorithmData {
     Genetic(genetic_algorithm::AlgorithmData),
+    LoopConstraints(loop_constraints_algorithm::AlgorithmData),
 }
 
 impl AlgorithmData {
@@ -51,6 +59,9 @@ impl AlgorithmData {
         match self {
             Self::Genetic(algorithm_data) => {
                 AlgorithmDataRequest::Genetic(algorithm_data.create_request())
+            }
+            Self::LoopConstraints(algorithm_data) => {
+                AlgorithmDataRequest::LoopConstraints(algorithm_data.create_request())
             }
         }
     }
@@ -60,14 +71,22 @@ impl AlgorithmData {
             AlgorithmDataRequest::Genetic(request) => Self::Genetic(
                 genetic_algorithm::AlgorithmData::create_from_request(request),
             ),
+            AlgorithmDataRequest::LoopConstraints(request) => Self::LoopConstraints(
+                loop_constraints_algorithm::AlgorithmData::create_from_request(request),
+            ),
         }
     }
 
     pub fn update_with_response(&mut self, response: AlgorithmDataResponse) {
-        match self {
-            Self::Genetic(algorithm_data) => algorithm_data.update_with_response(match response {
-                AlgorithmDataResponse::Genetic(response) => response,
-            }),
+        match (self, response) {
+            (Self::Genetic(algorithm_data), AlgorithmDataResponse::Genetic(response)) => {
+                algorithm_data.update_with_response(response)
+            }
+            (
+                Self::LoopConstraints(algorithm_data),
+                AlgorithmDataResponse::LoopConstraints(response),
+            ) => algorithm_data.update_with_response(response),
+            _ => unreachable!(),
         }
     }
 }
@@ -113,6 +132,9 @@ pub fn algorithm_next(
     match request {
         AlgorithmDataRequest::Genetic(request) => {
             genetic_algorithm::algorithm_next(images, request)
+        }
+        AlgorithmDataRequest::LoopConstraints(request) => {
+            loop_constraints_algorithm::algorithm_next(images, request)
         }
     }
 }

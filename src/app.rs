@@ -17,14 +17,15 @@ use self::{
     },
 };
 use crate::algorithms_async::{
-    algorithm_next, genetic_algorithm, AlgorithmData, AlgorithmDataRequest, AlgorithmError,
-    AlgorithmMessage, AlgorithmState, CompatibilityMeasure,
+    algorithm_next, genetic_algorithm, loop_constraints_algorithm, Algorithm, AlgorithmData,
+    AlgorithmDataRequest, AlgorithmError, AlgorithmMessage, AlgorithmState, CompatibilityMeasure,
 };
 
 mod app_ui;
 mod images_loader;
 
 pub struct AppState {
+    algorithm: Algorithm,
     compatibility_measure: CompatibilityMeasure,
     piece_size: u32,
     generations_count: usize,
@@ -45,6 +46,7 @@ pub enum AppMessage {
     StartAlgorithmPressed,
     SaveResultsPressed,
     SaveImagePressed,
+    AlgorithmToggled(Algorithm),
     CompatibilityMeasureToggled(CompatibilityMeasure),
     ShowIncorrectPiecesCheckboxToggled(bool),
     ShowIncorrectDirectNeighbourToggled(bool),
@@ -79,7 +81,8 @@ pub enum ErrorModalMessage {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            compatibility_measure: CompatibilityMeasure::Dissimilarity,
+            algorithm: Algorithm::Genetic,
+            compatibility_measure: CompatibilityMeasure::LabSSD,
             piece_size: 28,
             generations_count: 100,
             population_size: 100,
@@ -115,6 +118,22 @@ impl AppState {
             AlgorithmState::Finished(algorithm_data) => algorithm_data,
             _ => unreachable!(),
         };
+        let (gen_cnt, images_processed, img_width, img_height, solutions) = match algorithm_data {
+            AlgorithmData::Genetic(algorithm_data) => (
+                algorithm_data.best_chromosomes[self.ui.main_image_selected_image.unwrap()].len(),
+                algorithm_data.images_processed,
+                algorithm_data.img_width,
+                algorithm_data.img_height,
+                &algorithm_data.best_chromosomes,
+            ),
+            AlgorithmData::LoopConstraints(algorithm_data) => (
+                algorithm_data.solutions[self.ui.main_image_selected_image.unwrap()].len(),
+                algorithm_data.images_processed,
+                algorithm_data.img_width,
+                algorithm_data.img_height,
+                &algorithm_data.solutions,
+            ),
+        };
 
         let file_path_option = FileDialog::new()
             .add_filter("Таблица (.csv)", &["csv"])
@@ -135,37 +154,26 @@ impl AppState {
         }
         writeln!(writer)?;
 
-        match algorithm_data {
-            AlgorithmData::Genetic(algorithm_data) => {
-                for gen in 0..algorithm_data.generations_count {
-                    for image_i in 0..algorithm_data.images_processed {
-                        write!(
-                            writer,
-                            "{:.2},",
-                            image_direct_comparison(
-                                algorithm_data.img_width,
-                                &algorithm_data.best_chromosomes[image_i][gen]
-                            )
-                        )?;
-                    }
-                    for image_i in 0..algorithm_data.images_processed {
-                        write!(
-                            writer,
-                            "{:.2}",
-                            image_neighbour_comparison(
-                                algorithm_data.img_width,
-                                algorithm_data.img_height,
-                                &algorithm_data.best_chromosomes[image_i][gen]
-                            )
-                        )?;
-                        if image_i != images_data.loaded - 1 {
-                            write!(writer, ",")?;
-                        }
-                    }
-                    writeln!(writer)?;
+        for gen in 0..gen_cnt {
+            for image_i in 0..images_processed {
+                write!(
+                    writer,
+                    "{:.2},",
+                    image_direct_comparison(img_width, &solutions[image_i][gen])
+                )?;
+            }
+            for image_i in 0..images_processed {
+                write!(
+                    writer,
+                    "{:.2}",
+                    image_neighbour_comparison(img_width, img_height, &solutions[image_i][gen])
+                )?;
+                if image_i != images_data.loaded - 1 {
+                    write!(writer, ",")?;
                 }
             }
-        };
+            writeln!(writer)?;
+        }
 
         Ok(Command::none())
     }
@@ -178,6 +186,18 @@ impl AppState {
         let algorithm_data = match &self.algorithm_state {
             AlgorithmState::Finished(algorithm_data) => algorithm_data,
             _ => unreachable!(),
+        };
+        let (img_width, img_height, solutions) = match algorithm_data {
+            AlgorithmData::Genetic(algorithm_data) => (
+                algorithm_data.img_width,
+                algorithm_data.img_height,
+                &algorithm_data.best_chromosomes,
+            ),
+            AlgorithmData::LoopConstraints(algorithm_data) => (
+                algorithm_data.img_width,
+                algorithm_data.img_height,
+                &algorithm_data.solutions,
+            ),
         };
 
         let file_path_option = FileDialog::new()
@@ -192,17 +212,15 @@ impl AppState {
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
-        let image = match algorithm_data {
-            AlgorithmData::Genetic(algorithm_data) => get_solution_image(
-                &images_data.images[image_i],
-                self.piece_size,
-                algorithm_data.img_width,
-                algorithm_data.img_height,
-                &algorithm_data.best_chromosomes[image_i][gen],
-                self.ui.show_incorrect_pieces,
-                self.ui.show_incorrect_direct_neighbour,
-            ),
-        };
+        let image = get_solution_image(
+            &images_data.images[image_i],
+            self.piece_size,
+            img_width,
+            img_height,
+            &solutions[image_i][gen],
+            self.ui.show_incorrect_pieces,
+            self.ui.show_incorrect_direct_neighbour,
+        );
         image.save(file_path_option.unwrap())?;
         Ok(Command::none())
     }
@@ -236,22 +254,42 @@ impl AppState {
             (image_height / self.piece_size) as usize,
         );
 
-        let algorithm_data =
-            AlgorithmDataRequest::Genetic(genetic_algorithm::AlgorithmDataRequest {
-                compatibility_measure: self.compatibility_measure,
-                piece_size: self.piece_size,
-                generations_count: self.generations_count,
-                population_size: self.population_size,
-                rng: Xoshiro256PlusPlus::seed_from_u64(self.rand_seed),
-                img_width,
-                img_height,
-                images_processed: 0,
-                image_generations_processed: 0,
-                image_prepared: false,
-                pieces_compatibility: Arc::new([Vec::new(), Vec::new()]),
-                pieces_buddies: Arc::new([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
-                current_generation: Arc::new(Vec::new()),
-            });
+        let algorithm_data = match self.algorithm {
+            Algorithm::Genetic => {
+                AlgorithmDataRequest::Genetic(genetic_algorithm::AlgorithmDataRequest {
+                    compatibility_measure: self.compatibility_measure,
+                    piece_size: self.piece_size,
+                    generations_count: self.generations_count,
+                    population_size: self.population_size,
+                    rng: Xoshiro256PlusPlus::seed_from_u64(self.rand_seed),
+                    img_width,
+                    img_height,
+                    images_processed: 0,
+                    image_generations_processed: 0,
+                    image_prepared: false,
+                    pieces_compatibility: Arc::new([Vec::new(), Vec::new()]),
+                    pieces_buddies: Arc::new([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
+                    current_generation: Arc::new(Vec::new()),
+                })
+            }
+            Algorithm::LoopConstraints => AlgorithmDataRequest::LoopConstraints(
+                loop_constraints_algorithm::AlgorithmDataRequest {
+                    compatibility_measure: self.compatibility_measure,
+                    piece_size: self.piece_size,
+                    img_width,
+                    img_height,
+                    images_processed: 0,
+                    image_prepared: false,
+                    pieces_compatibility: Arc::new([Vec::new(), Vec::new()]),
+                    pieces_match_candidates: Arc::new([
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                    ]),
+                },
+            ),
+        };
 
         Ok(Command::perform(async {}, move |_| {
             AppMessage::AlgorithmMessage(AlgorithmMessage::Initialization(algorithm_data.clone()))
@@ -267,32 +305,35 @@ impl AppState {
             AlgorithmState::Finished(algorithm_data) => algorithm_data,
             _ => unreachable!(),
         };
+        let (img_width, img_height, solutions) = match algorithm_data {
+            AlgorithmData::Genetic(algorithm_data) => (
+                algorithm_data.img_width,
+                algorithm_data.img_height,
+                &algorithm_data.best_chromosomes,
+            ),
+            AlgorithmData::LoopConstraints(algorithm_data) => (
+                algorithm_data.img_width,
+                algorithm_data.img_height,
+                &algorithm_data.solutions,
+            ),
+        };
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
-        match algorithm_data {
-            AlgorithmData::Genetic(algorithm_data) => {
-                let new_image = get_solution_image(
-                    &images_data.images[image_i],
-                    self.piece_size,
-                    algorithm_data.img_width,
-                    algorithm_data.img_height,
-                    &algorithm_data.best_chromosomes[image_i][gen],
-                    self.ui.show_incorrect_pieces,
-                    self.ui.show_incorrect_direct_neighbour,
-                );
-                self.ui.main_image_handle = Some(get_image_handle(&new_image));
-                self.ui.main_image_direct_comparison = image_direct_comparison(
-                    algorithm_data.img_width,
-                    &algorithm_data.best_chromosomes[image_i][gen],
-                );
-                self.ui.main_image_neighbour_comparison = image_neighbour_comparison(
-                    algorithm_data.img_width,
-                    algorithm_data.img_height,
-                    &algorithm_data.best_chromosomes[image_i][gen],
-                );
-            }
-        };
+        let new_image = get_solution_image(
+            &images_data.images[image_i],
+            self.piece_size,
+            img_width,
+            img_height,
+            &solutions[image_i][gen],
+            self.ui.show_incorrect_pieces,
+            self.ui.show_incorrect_direct_neighbour,
+        );
+        self.ui.main_image_handle = Some(get_image_handle(&new_image));
+        self.ui.main_image_direct_comparison =
+            image_direct_comparison(img_width, &solutions[image_i][gen]);
+        self.ui.main_image_neighbour_comparison =
+            image_neighbour_comparison(img_width, img_height, &solutions[image_i][gen]);
         Ok(Command::none())
     }
 
@@ -305,6 +346,10 @@ impl AppState {
             AppMessage::StartAlgorithmPressed => self.algorithm_start(),
             AppMessage::SaveResultsPressed => self.save_results(),
             AppMessage::SaveImagePressed => self.save_image(),
+            AppMessage::AlgorithmToggled(x) => {
+                self.algorithm = x;
+                Ok(Command::none())
+            }
             AppMessage::CompatibilityMeasureToggled(x) => {
                 self.compatibility_measure = x;
                 Ok(Command::none())
