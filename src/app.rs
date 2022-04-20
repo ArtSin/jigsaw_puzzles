@@ -279,14 +279,6 @@ impl AppState {
                     img_width,
                     img_height,
                     images_processed: 0,
-                    image_prepared: false,
-                    pieces_compatibility: Arc::new([Vec::new(), Vec::new()]),
-                    pieces_match_candidates: Arc::new([
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                    ]),
                 },
             ),
         };

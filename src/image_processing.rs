@@ -44,13 +44,15 @@ pub fn get_solution_image(
             // Деталь в заданной позиции
             let (i, j) = &solution[r * img_width + c];
             // Копирование изображения детали в нужную позицию
-            new_image
-                .copy_from(
-                    &*pieces[*i][*j],
-                    (c as u32) * piece_size,
-                    (r as u32) * piece_size,
-                )
-                .unwrap();
+            if *i != usize::MAX {
+                new_image
+                    .copy_from(
+                        &*pieces[*i][*j],
+                        (c as u32) * piece_size,
+                        (r as u32) * piece_size,
+                    )
+                    .unwrap();
+            }
 
             // Если требуется отображение неправильных деталей
             if show_incorrect {
