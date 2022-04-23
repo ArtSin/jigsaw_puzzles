@@ -149,9 +149,9 @@ fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
                             }
                         }
                     }
-                    for r_left in 0..size {
-                        for r_right in 0..size {
-                            if sl_left[r_left][0] == sl_right[r_right][size - 1] {
+                    for v_left in sl_left {
+                        for v_right in sl_right {
+                            if v_left[0] == v_right[size - 1] {
                                 return None;
                             }
                         }
@@ -175,9 +175,9 @@ fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
                             }
                         }
                     }
-                    for c_left in 0..size {
-                        for c_right in 0..size {
-                            if sl_up[0][c_left] == sl_down[size - 1][c_right] {
+                    for x_left in &sl_up[0] {
+                        for x_right in &sl_down[size - 1] {
+                            if x_left == x_right {
                                 return None;
                             }
                         }
@@ -419,7 +419,7 @@ fn can_merge_matrices(
             }
         })
         .collect();
-    tmp_y.sort();
+    tmp_y.sort_unstable();
     // Количество деталей, встречающихся в обоих матрицах
     let mut cnt = 0;
     // Сдвиг между общими деталями в первой и второй матрицах
@@ -483,20 +483,20 @@ fn can_merge_matrices(
     // Новая матрица
     let mut m_new = vec![vec![(usize::MAX, usize::MAX); m_new_c]; m_new_r];
     // Копирование в неё матрицы x
-    for r_x in 0..m_x.len() {
-        for c_x in 0..m_x[r_x].len() {
+    for (r_x, v_x) in m_x.iter().enumerate() {
+        for (c_x, x) in v_x.iter().enumerate() {
             let (r_new, c_new) = (r_x + d_r, c_x + d_c);
-            m_new[r_new][c_new] = m_x[r_x][c_x];
+            m_new[r_new][c_new] = *x;
         }
     }
     // Копирование в неё матрицы y
-    for r_y in 0..m_y.len() {
-        for c_y in 0..m_y[r_y].len() {
+    for (r_y, v_y) in m_y.iter().enumerate() {
+        for (c_y, y) in v_y.iter().enumerate() {
             let (r_new, c_new) = (r_y + d_minus_shift_r, c_y + d_minus_shift_c);
-            if m_new[r_new][c_new].0 != usize::MAX && m_new[r_new][c_new] != m_y[r_y][c_y] {
+            if m_new[r_new][c_new].0 != usize::MAX && m_new[r_new][c_new] != *y {
                 return MatrixCompatibility::Incompatible;
             }
-            m_new[r_new][c_new] = m_y[r_y][c_y];
+            m_new[r_new][c_new] = *y;
         }
     }
     // Если новая матрица совпадает с одной из объединяемых, то объединять не нужно
@@ -513,7 +513,7 @@ fn can_merge_matrices(
         .flatten()
         .filter(|x| x.0 != usize::MAX)
         .collect();
-    tmp_new.sort();
+    tmp_new.sort_unstable();
     let tmp_new_len = tmp_new.len();
     tmp_new.dedup();
     // Если в матрице повторялись детали, то объединение невозможно
@@ -553,17 +553,17 @@ fn merge_matrices(
     // Новая матрица
     let mut m_new = vec![vec![(usize::MAX, usize::MAX); m_new_c]; m_new_r];
     // Копирование в неё матрицы x
-    for r_x in 0..m_x.len() {
-        for c_x in 0..m_x[r_x].len() {
+    for (r_x, v_x) in m_x.iter().enumerate() {
+        for (c_x, x) in v_x.iter().enumerate() {
             let (r_new, c_new) = (r_x + d_r, c_x + d_c);
-            m_new[r_new][c_new] = m_x[r_x][c_x];
+            m_new[r_new][c_new] = *x;
         }
     }
     // Копирование в неё матрицы y
-    for r_y in 0..m_y.len() {
-        for c_y in 0..m_y[r_y].len() {
+    for (r_y, v_y) in m_y.iter().enumerate() {
+        for (c_y, y) in v_y.iter().enumerate() {
             let (r_new, c_new) = (r_y + d_minus_shift_r, c_y + d_minus_shift_c);
-            m_new[r_new][c_new] = m_y[r_y][c_y];
+            m_new[r_new][c_new] = *y;
         }
     }
     m_new
@@ -643,7 +643,7 @@ fn merge_matrices_groups(
         while !available_pairs.is_empty() {
             let (pairs_key, pairs_v) = available_pairs.iter_mut().next().unwrap();
             if pairs_v.is_empty() {
-                let pairs_key = pairs_key.clone();
+                let pairs_key = *pairs_key;
                 available_pairs.remove(&pairs_key);
                 continue;
             }

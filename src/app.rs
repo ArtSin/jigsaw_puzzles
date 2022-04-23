@@ -118,17 +118,15 @@ impl AppState {
             AlgorithmState::Finished(algorithm_data) => algorithm_data,
             _ => unreachable!(),
         };
-        let (gen_cnt, images_processed, img_width, img_height, solutions) = match algorithm_data {
+        let (gen_cnt, img_width, img_height, solutions) = match algorithm_data {
             AlgorithmData::Genetic(algorithm_data) => (
                 algorithm_data.generations_count,
-                algorithm_data.images_processed,
                 algorithm_data.img_width,
                 algorithm_data.img_height,
                 &algorithm_data.best_chromosomes,
             ),
             AlgorithmData::LoopConstraints(algorithm_data) => (
                 1,
-                algorithm_data.images_processed,
                 algorithm_data.img_width,
                 algorithm_data.img_height,
                 &algorithm_data.solutions,
@@ -155,18 +153,18 @@ impl AppState {
         writeln!(writer)?;
 
         for gen in 0..gen_cnt {
-            for image_i in 0..images_processed {
+            for image_solutions in solutions {
                 write!(
                     writer,
                     "{:.2},",
-                    image_direct_comparison(img_width, &solutions[image_i][gen])
+                    image_direct_comparison(img_width, &image_solutions[gen])
                 )?;
             }
-            for image_i in 0..images_processed {
+            for (image_i, image_solutions) in solutions.iter().enumerate() {
                 write!(
                     writer,
                     "{:.2}",
-                    image_neighbour_comparison(img_width, img_height, &solutions[image_i][gen])
+                    image_neighbour_comparison(img_width, img_height, &image_solutions[gen])
                 )?;
                 if image_i != images_data.loaded - 1 {
                     write!(writer, ",")?;
