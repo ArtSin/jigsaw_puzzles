@@ -1,4 +1,7 @@
-use std::{cmp::max, collections::BTreeMap};
+use std::{
+    cmp::{max, min},
+    collections::BTreeMap,
+};
 
 use float_ord::FloatOrd;
 use fxhash::FxBuildHasher;
@@ -705,8 +708,26 @@ fn fill_greedy(
     img_width: usize,
     img_height: usize,
     pieces_compatibility: &[Vec<Vec<f32>>; 2],
-    solution: &mut Solution,
-) {
+    old_solution_r: usize,
+    old_solution_c: usize,
+    old_solution: Solution,
+) -> Solution {
+    let (missing_r, missing_c) = (img_height - old_solution_r, img_width - old_solution_c);
+    let (solution_r, solution_c) = (
+        old_solution_r + 2 * missing_r,
+        old_solution_c + 2 * missing_c,
+    );
+    let mut solution = vec![(usize::MAX, usize::MAX); solution_r * solution_c];
+    for r in 0..old_solution_r {
+        for c in 0..old_solution_c {
+            solution[(r + missing_r) * solution_c + c + missing_c] =
+                old_solution[r * old_solution_c + c];
+        }
+    }
+    // Текущие грани построенного изображения
+    let (mut min_r, mut max_r, mut min_c, mut max_c) =
+        (missing_r, img_height - 1, missing_c, img_width - 1);
+
     let mut free_pieces: IndexSet<_, FxBuildHasher> = (0..img_height)
         .flat_map(|r| (0..img_width).map(move |c| (r, c)))
         .collect();
@@ -724,33 +745,47 @@ fn fill_greedy(
     let add_to_free_positions = |solution: &mut Solution,
                                  free_positions: &mut [IndexSet<(usize, usize), FxBuildHasher>;
                                           5],
+                                 min_r: usize,
+                                 max_r: usize,
+                                 min_c: usize,
+                                 max_c: usize,
                                  r: usize,
                                  c: usize| {
-        if solution[r * img_width + c].0 != usize::MAX {
+        if solution[r * solution_c + c].0 != usize::MAX {
             return;
         }
         let mut cnt = 0;
         for dr in [-1isize, 1] {
             for dc in [-1isize, 1] {
                 let (new_r, new_c) = ((r as isize) + dr, (c as isize) + dc);
-                if new_r < 0
-                    || new_r >= (img_height as isize)
-                    || new_c < 0
-                    || new_c >= (img_width as isize)
-                {
+                if new_r < 0 || new_c < 0 {
                     continue;
                 }
                 let (new_r, new_c) = (new_r as usize, new_c as usize);
-                if solution[new_r * img_width + new_c].0 == usize::MAX {
+                if 1 + max(max_r, new_r) - min(min_r, new_r) > img_height
+                    || 1 + max(max_c, new_c) - min(min_c, new_c) > img_width
+                {
+                    continue;
+                }
+                if solution[new_r * solution_c + new_c].0 == usize::MAX {
                     cnt += 1;
                 }
             }
         }
         free_positions[cnt].insert((r, c));
     };
-    for r in 0..img_height {
-        for c in 0..img_width {
-            add_to_free_positions(solution, &mut free_positions, r, c);
+    for r in 0..solution_r {
+        for c in 0..solution_c {
+            add_to_free_positions(
+                &mut solution,
+                &mut free_positions,
+                min_r,
+                max_r,
+                min_c,
+                max_c,
+                r,
+                c,
+            );
         }
     }
 
@@ -759,31 +794,38 @@ fn fill_greedy(
             if free_positions[cnt].is_empty() {
                 continue;
             }
-            let (pos_r, pos_c) = *free_positions[cnt].first().unwrap();
+            let pos = free_positions[cnt].iter().find(|&&(r, c)| {
+                1 + max(max_r, r) - min(min_r, r) <= img_height
+                    && 1 + max(max_c, c) - min(min_c, c) <= img_width
+            });
+            if pos.is_none() {
+                continue;
+            }
+            let (pos_r, pos_c) = *pos.unwrap();
 
             // Деталь слева
             let (left_piece_r, left_piece_c) = if pos_c == 0 {
                 (usize::MAX, usize::MAX)
             } else {
-                solution[pos_r * img_width + pos_c - 1]
+                solution[pos_r * solution_c + pos_c - 1]
             };
             // Деталь справа
-            let (right_piece_r, right_piece_c) = if pos_c == img_width - 1 {
+            let (right_piece_r, right_piece_c) = if pos_c == solution_c - 1 {
                 (usize::MAX, usize::MAX)
             } else {
-                solution[pos_r * img_width + pos_c + 1]
+                solution[pos_r * solution_c + pos_c + 1]
             };
             // Деталь сверху
             let (up_piece_r, up_piece_c) = if pos_r == 0 {
                 (usize::MAX, usize::MAX)
             } else {
-                solution[(pos_r - 1) * img_width + pos_c]
+                solution[(pos_r - 1) * solution_c + pos_c]
             };
             // Деталь снизу
-            let (down_piece_r, down_piece_c) = if pos_r == img_height - 1 {
+            let (down_piece_r, down_piece_c) = if pos_r == solution_r - 1 {
                 (usize::MAX, usize::MAX)
             } else {
-                solution[(pos_r + 1) * img_width + pos_c]
+                solution[(pos_r + 1) * solution_c + pos_c]
             };
 
             // Наименьшая несовместимость
@@ -834,20 +876,55 @@ fn fill_greedy(
 
             free_pieces.remove(&best_piece);
             free_positions[cnt].remove(&(pos_r, pos_c));
-            solution[pos_r * img_width + pos_c] = best_piece;
+            solution[pos_r * solution_c + pos_c] = best_piece;
+
+            // Обновление верхней границы
+            if pos_r < min_r {
+                min_r = pos_r;
+            }
+            // Обновление нижней границы
+            else if pos_r > max_r {
+                max_r = pos_r;
+            }
+            // Обновление левой границы
+            if pos_c < min_c {
+                min_c = pos_c;
+            }
+            // Обновление правой границы
+            else if pos_c > max_c {
+                max_c = pos_c;
+            }
 
             if pos_c != 0 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r, pos_c - 1)) {
-                        add_to_free_positions(solution, &mut free_positions, pos_r, pos_c - 1);
+                        add_to_free_positions(
+                            &mut solution,
+                            &mut free_positions,
+                            min_r,
+                            max_r,
+                            min_c,
+                            max_c,
+                            pos_r,
+                            pos_c - 1,
+                        );
                         break;
                     }
                 }
             }
-            if pos_c != img_width - 1 {
+            if pos_c != solution_c - 1 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r, pos_c + 1)) {
-                        add_to_free_positions(solution, &mut free_positions, pos_r, pos_c + 1);
+                        add_to_free_positions(
+                            &mut solution,
+                            &mut free_positions,
+                            min_r,
+                            max_r,
+                            min_c,
+                            max_c,
+                            pos_r,
+                            pos_c + 1,
+                        );
                         break;
                     }
                 }
@@ -855,15 +932,33 @@ fn fill_greedy(
             if pos_r != 0 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r - 1, pos_c)) {
-                        add_to_free_positions(solution, &mut free_positions, pos_r - 1, pos_c);
+                        add_to_free_positions(
+                            &mut solution,
+                            &mut free_positions,
+                            min_r,
+                            max_r,
+                            min_c,
+                            max_c,
+                            pos_r - 1,
+                            pos_c,
+                        );
                         break;
                     }
                 }
             }
-            if pos_r != img_height - 1 {
+            if pos_r != solution_r - 1 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r + 1, pos_c)) {
-                        add_to_free_positions(solution, &mut free_positions, pos_r + 1, pos_c);
+                        add_to_free_positions(
+                            &mut solution,
+                            &mut free_positions,
+                            min_r,
+                            max_r,
+                            min_c,
+                            max_c,
+                            pos_r + 1,
+                            pos_c,
+                        );
                         break;
                     }
                 }
@@ -872,6 +967,18 @@ fn fill_greedy(
             break;
         }
     }
+
+    assert!(free_pieces.is_empty());
+    assert_eq!(1 + max_r - min_r, img_height);
+    assert_eq!(1 + max_c - min_c, img_width);
+    // Вырезание результата
+    (min_r..=max_r)
+        .flat_map(|r| {
+            (min_c..=max_c)
+                .map(|c| solution[r * solution_c + c])
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 // Шаг алгоритма
@@ -885,14 +992,22 @@ pub fn algorithm_step(
     println!("{:?}", sl_all.iter().map(|v| v.len()).collect::<Vec<_>>());
     let matrices_last = merge_matrices_groups(img_width, img_height, pieces_compatibility, sl_all);
     let matrices_last_first = matrices_last.first().unwrap();
-    let mut solution = vec![(usize::MAX, usize::MAX); img_width * img_height];
+    let (solution_r, solution_c) = (matrices_last_first.len(), matrices_last_first[0].len());
+    let mut solution = vec![(usize::MAX, usize::MAX); solution_r * solution_c];
     for r in 0..matrices_last_first.len() {
         for c in 0..matrices_last_first[r].len() {
             if matrices_last_first[r][c].0 != usize::MAX {
-                solution[r * img_width + c] = matrices_last_first[r][c];
+                solution[r * solution_c + c] = matrices_last_first[r][c];
             }
         }
     }
-    fill_greedy(img_width, img_height, pieces_compatibility, &mut solution);
-    vec![solution]
+    let new_solution = fill_greedy(
+        img_width,
+        img_height,
+        pieces_compatibility,
+        solution_r,
+        solution_c,
+        solution,
+    );
+    vec![new_solution]
 }
