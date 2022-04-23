@@ -120,14 +120,14 @@ impl AppState {
         };
         let (gen_cnt, images_processed, img_width, img_height, solutions) = match algorithm_data {
             AlgorithmData::Genetic(algorithm_data) => (
-                algorithm_data.best_chromosomes[self.ui.main_image_selected_image.unwrap()].len(),
+                algorithm_data.generations_count,
                 algorithm_data.images_processed,
                 algorithm_data.img_width,
                 algorithm_data.img_height,
                 &algorithm_data.best_chromosomes,
             ),
             AlgorithmData::LoopConstraints(algorithm_data) => (
-                algorithm_data.solutions[self.ui.main_image_selected_image.unwrap()].len(),
+                1,
                 algorithm_data.images_processed,
                 algorithm_data.img_width,
                 algorithm_data.img_height,
@@ -369,7 +369,18 @@ impl AppState {
                 self.load_selected_image()
             }
             AppMessage::LastGenerationPressed => {
-                self.ui.main_image_selected_generation = Some(self.generations_count - 1);
+                let gen_cnt = match &self.algorithm_state {
+                    AlgorithmState::Finished(algorithm_data) => match algorithm_data {
+                        AlgorithmData::Genetic(algorithm_data) => algorithm_data.best_chromosomes
+                            [self.ui.main_image_selected_image.unwrap()]
+                        .len(),
+                        AlgorithmData::LoopConstraints(algorithm_data) => algorithm_data.solutions
+                            [self.ui.main_image_selected_image.unwrap()]
+                        .len(),
+                    },
+                    _ => unreachable!(),
+                };
+                self.ui.main_image_selected_generation = Some(gen_cnt - 1);
                 self.load_selected_image()
             }
             AppMessage::ImagesButtonPressed(image_i) => {

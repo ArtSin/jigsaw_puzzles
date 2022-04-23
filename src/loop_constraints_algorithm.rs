@@ -1,7 +1,4 @@
-use std::{
-    cmp::{max, min},
-    collections::BTreeMap,
-};
+use std::{cmp::max, collections::BTreeMap};
 
 use float_ord::FloatOrd;
 use fxhash::FxBuildHasher;
@@ -15,19 +12,21 @@ use crate::Solution;
 type Matrix = Vec<Vec<(usize, usize)>>;
 type MatrixPriority = (isize, FloatOrd<f32>);
 
-const CANDIDATE_MATCH_RATIO: f32 = 1.25;
-const MAX_CANDIDATES: usize = 4;
-
 enum MatrixCompatibility {
-    Compatible(isize, isize),
+    Compatible(isize, isize, MatrixPriority),
     Incompatible,
     NotRelated,
 }
 
+const CANDIDATE_MATCH_RATIO: f32 = 1.15;
+const CANDIDATE_MATCH_RATIO_EQUAL: f32 = 1.0001;
+const MAX_CANDIDATES: usize = 10;
+const MAX_CANDIDATES_EQUAL: usize = 7;
+
 pub fn find_match_candidates(
     img_width: usize,
     pieces_compatibility: &[Vec<Vec<f32>>; 2],
-) -> [Vec<Vec<(usize, usize)>>; 4] {
+) -> [Vec<Vec<(usize, usize)>>; 2] {
     let get_candidates = |ind: usize| {
         let min_scores = pieces_compatibility[ind]
             .par_iter()
@@ -54,6 +53,16 @@ pub fn find_match_candidates(
                 tmp.sort_by_key(|x| FloatOrd(*x.1));
                 tmp.into_iter()
                     .take(MAX_CANDIDATES)
+                    .enumerate()
+                    .filter_map(|(ind, x)| {
+                        if ind < MAX_CANDIDATES_EQUAL
+                            || *x.1 > CANDIDATE_MATCH_RATIO_EQUAL * min_score
+                        {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    })
                     .map(|(j, _)| (j / img_width, j % img_width))
                     .collect::<Vec<_>>()
             })
@@ -89,6 +98,16 @@ pub fn find_match_candidates(
                 tmp.sort_by_key(|x| FloatOrd(x.1));
                 tmp.into_iter()
                     .take(MAX_CANDIDATES)
+                    .enumerate()
+                    .filter_map(|(ind, x)| {
+                        if ind < MAX_CANDIDATES_EQUAL
+                            || x.1 > CANDIDATE_MATCH_RATIO_EQUAL * min_score
+                        {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    })
                     .map(|(j, _)| (j / img_width, j % img_width))
                     .collect::<Vec<_>>()
             })
@@ -97,12 +116,23 @@ pub fn find_match_candidates(
     let left_candidates = get_opposite_candidates(0);
     let up_candidates = get_opposite_candidates(1);
 
-    [
-        right_candidates,
-        down_candidates,
-        left_candidates,
-        up_candidates,
-    ]
+    let get_buddies = |candidates: Vec<Vec<(usize, usize)>>,
+                       opposite_candidates: Vec<Vec<(usize, usize)>>| {
+        candidates
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let x = (i / img_width, i % img_width);
+                v.into_iter()
+                    .filter(|y| opposite_candidates[y.0 * img_width + y.1].contains(&x))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    let right_buddies = get_buddies(right_candidates, left_candidates);
+    let down_buddies = get_buddies(down_candidates, up_candidates);
+
+    [right_buddies, down_buddies]
 }
 
 fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
@@ -168,7 +198,7 @@ fn merge_loops(
     left_down: &Matrix,
     right_down: &Matrix,
 ) -> Matrix {
-    let mut new_loop = vec![vec![(0, 0); size + 1]; size + 1];
+    let mut new_loop = vec![vec![(usize::MAX, usize::MAX); size + 1]; size + 1];
     for r in 0..size {
         for c in 0..size {
             new_loop[r][c] = left_up[r][c];
@@ -187,7 +217,7 @@ fn merge_loops(
 fn small_loops(
     img_width: usize,
     img_height: usize,
-    pieces_match_candidates: &[Vec<Vec<(usize, usize)>>; 4],
+    pieces_match_candidates: &[Vec<Vec<(usize, usize)>>; 2],
 ) -> Vec<Vec<Matrix>> {
     let sl_1_right = (0..img_height).flat_map(|left_r| {
         (0..img_width)
@@ -287,7 +317,13 @@ fn small_loops(
                                         matches[1][*right_up_i]
                                             .iter()
                                             .filter_map(|right_down_1_i| {
-                                                if right_down_0_i == right_down_1_i {
+                                                if right_down_0_i == right_down_1_i
+                                                    && sl_last[left_up_i][0][0]
+                                                        != sl_last[*right_down_0_i][sl_size - 1]
+                                                            [sl_size - 1]
+                                                    && sl_last[*right_up_i][0][sl_size - 1]
+                                                        != sl_last[*left_down_i][sl_size - 1][0]
+                                                {
                                                     let sl = merge_loops(
                                                         sl_size,
                                                         &sl_last[left_up_i],
@@ -295,21 +331,7 @@ fn small_loops(
                                                         &sl_last[*left_down_i],
                                                         &sl_last[*right_down_0_i],
                                                     );
-
-                                                    let mut lol: Vec<_> = sl
-                                                        .iter()
-                                                        .flatten()
-                                                        .cloned()
-                                                        .filter(|x| x.0 != usize::MAX)
-                                                        .collect();
-                                                    lol.sort();
-                                                    let lol_len = lol.len();
-                                                    lol.dedup();
-                                                    if lol_len == lol.len() {
-                                                        Some(sl)
-                                                    } else {
-                                                        None
-                                                    }
+                                                    Some(sl)
                                                 } else {
                                                     None
                                                 }
@@ -376,13 +398,26 @@ fn matrix_priority(
 }
 
 // Проверка матриц на совместимость (возможность объединения)
-fn can_merge_matrices(m_x: &Matrix, m_y: &Matrix) -> MatrixCompatibility {
+fn can_merge_matrices(
+    img_width: usize,
+    img_height: usize,
+    pieces_compatibility: &[Vec<Vec<f32>>; 2],
+    m_x: &Matrix,
+    m_y: &Matrix,
+) -> MatrixCompatibility {
     // Отсортированные детали второй матрицы
     let mut tmp_y: Vec<_> = m_y
         .iter()
         .flatten()
         .cloned()
-        .filter(|x| x.0 != usize::MAX)
+        .enumerate()
+        .filter_map(|(i, x)| {
+            if x.0 != usize::MAX {
+                Some((x, i))
+            } else {
+                None
+            }
+        })
         .collect();
     tmp_y.sort();
     // Количество деталей, встречающихся в обоих матрицах
@@ -391,10 +426,14 @@ fn can_merge_matrices(m_x: &Matrix, m_y: &Matrix) -> MatrixCompatibility {
     let mut shared_shift = None;
     // Проверка существования детали из первой матрицы во второй
     for (x_ind, x) in m_x.iter().flatten().enumerate() {
-        if let Ok(y_ind) = tmp_y.binary_search(&x) {
+        if x.0 == usize::MAX {
+            continue;
+        }
+        if let Ok(y_ind_tmp) = tmp_y.binary_search_by_key(&x, |pr| &pr.0) {
             cnt += 1;
             // Вычисление общего сдвига
             if shared_shift.is_none() {
+                let y_ind = tmp_y[y_ind_tmp].1;
                 let (x_r, x_c) = (x_ind / m_x[0].len(), x_ind % m_x[0].len());
                 let (y_r, y_c) = (y_ind / m_y[0].len(), y_ind % m_y[0].len());
                 shared_shift = Some((
@@ -410,141 +449,79 @@ fn can_merge_matrices(m_x: &Matrix, m_y: &Matrix) -> MatrixCompatibility {
     }
     // Если не больше одной общей детали, то матрицы не связаны друг с другом
     // Исключение для матриц-пар
-    let m_x_check = m_x.len() == 1 || m_x[0].len() == 1;
-    let m_y_check = m_y.len() == 1 || m_y[0].len() == 1;
-    if cnt < 2 && !(cnt == 1 && (m_x_check ^ m_y_check)) {
+    if cnt < 2
+        && !(cnt == 1
+            && ((m_x.len() == 1 || m_x[0].len() == 1) ^ (m_y.len() == 1 || m_y[0].len() == 1)))
+    {
         return MatrixCompatibility::NotRelated;
     }
-    let shared_shift = shared_shift.unwrap();
+    let (shared_shift_r, shared_shift_c) = shared_shift.unwrap();
 
-    let mut is_good = vec![vec![true; m_x[0].len()]; m_x.len()];
-    // Нахождение области совместимости матриц
-    for r_x_u in 0..m_x.len() {
-        for c_x_u in 0..m_x[r_x_u].len() {
-            let (r_x, c_x) = (r_x_u as isize, c_x_u as isize);
-            // Координаты детали во второй матрице
-            let (r_y, c_y) = (r_x + shared_shift.0, c_x + shared_shift.1);
-            // Выход за границы второй матрицы
-            if r_y < 0 || c_y < 0 {
-                is_good[r_x_u][c_x_u] = false;
-                continue;
-            }
-            let (r_y_u, c_y_u) = (r_y as usize, c_y as usize);
-
-            let piece_y = m_y.get(r_y_u).and_then(|v| v.get(c_y_u));
-            // Выход за границы второй матрицы
-            if piece_y.is_none() {
-                is_good[r_x_u][c_x_u] = false;
-                continue;
-            }
-            let piece_y = *piece_y.unwrap();
-            let piece_x = m_x[r_x_u][c_x_u];
-            // Если в обеих матрицах в данных позициях есть детали, то они должны совпадать
-            if piece_x.0 != usize::MAX && piece_y.0 != usize::MAX && piece_x != piece_y {
-                is_good[r_x_u][c_x_u] = false;
-                continue;
-            }
-        }
+    // Размеры матриц x и y
+    let (m_x_r, m_x_c) = (m_x.len(), m_x[0].len());
+    let (m_y_r, m_y_c) = (m_y.len(), m_y[0].len());
+    // Переход из системы координат матрицы x к с. к. новой матрицы
+    let (d_r, d_c) = (
+        max(0, shared_shift_r) as usize,
+        max(0, shared_shift_c) as usize,
+    );
+    // Переход из системы координат матрицы y к с. к. новой матрицы
+    let (d_minus_shift_r, d_minus_shift_c) = (
+        ((d_r as isize) - shared_shift_r) as usize,
+        ((d_c as isize) - shared_shift_c) as usize,
+    );
+    // Размер новой матрицы
+    let (m_new_r, m_new_c) = (
+        max(m_x_r + d_r, m_y_r + d_minus_shift_r),
+        max(m_x_c + d_c, m_y_c + d_minus_shift_c),
+    );
+    // Матрица должна быть не больше изображения
+    if m_new_r > img_height || m_new_c > img_width {
+        return MatrixCompatibility::NotRelated;
     }
 
-    // Область совместимости матриц (в координатах первой матрицы)
-    let mut good_area = 0;
-    let mut good_min_r = usize::MAX;
-    let mut good_max_r = usize::MAX;
-    let mut good_min_c = usize::MAX;
-    let mut good_max_c = usize::MAX;
-
-    let mut dp_left = vec![0usize; m_x[0].len()];
-    let mut dp_right = vec![m_x[0].len(); m_x[0].len()];
-    let mut dp_height = vec![0usize; m_x[0].len()];
+    // Новая матрица
+    let mut m_new = vec![vec![(usize::MAX, usize::MAX); m_new_c]; m_new_r];
+    // Копирование в неё матрицы x
     for r_x in 0..m_x.len() {
-        let mut curr_left = 0;
-        let mut curr_right = m_x[r_x].len();
         for c_x in 0..m_x[r_x].len() {
-            if is_good[r_x][c_x] {
-                dp_height[c_x] += 1;
-            } else {
-                dp_height[c_x] = 0;
-            }
-        }
-        for c_x in 0..m_x[r_x].len() {
-            if is_good[r_x][c_x] {
-                dp_left[c_x] = max(dp_left[c_x], curr_left);
-            } else {
-                dp_left[c_x] = 0;
-                curr_left = c_x + 1;
-            }
-        }
-        for c_x in (0..m_x[r_x].len()).rev() {
-            if is_good[r_x][c_x] {
-                dp_right[c_x] = min(dp_right[c_x], curr_right);
-            } else {
-                dp_right[c_x] = m_x[r_x].len();
-                curr_right = c_x;
-            }
-        }
-        for c_x in 0..m_x[r_x].len() {
-            let curr_area = (dp_right[c_x] - dp_left[c_x]) * dp_height[c_x];
-            if curr_area > good_area {
-                good_area = curr_area;
-                good_min_r = r_x + 1 - dp_height[c_x];
-                good_max_r = r_x;
-                good_min_c = dp_left[c_x];
-                good_max_c = dp_right[c_x] - 1;
-            }
+            let (r_new, c_new) = (r_x + d_r, c_x + d_c);
+            m_new[r_new][c_new] = m_x[r_x][c_x];
         }
     }
-
-    if good_area == 0 {
+    // Копирование в неё матрицы y
+    for r_y in 0..m_y.len() {
+        for c_y in 0..m_y[r_y].len() {
+            let (r_new, c_new) = (r_y + d_minus_shift_r, c_y + d_minus_shift_c);
+            if m_new[r_new][c_new].0 != usize::MAX && m_new[r_new][c_new] != m_y[r_y][c_y] {
+                return MatrixCompatibility::Incompatible;
+            }
+            m_new[r_new][c_new] = m_y[r_y][c_y];
+        }
+    }
+    // Если новая матрица совпадает с одной из объединяемых, то объединять не нужно
+    if m_new == *m_x || m_new == *m_y {
         return MatrixCompatibility::Incompatible;
     }
 
-    // Отсортированные детали второй матрицы, не попавшие в область совместимости
-    let mut tmp_y: Vec<_> = (0..m_x.len())
-        .flat_map(|r_x| {
-            (0..m_x[r_x].len())
-                .filter_map(|c_x| {
-                    if r_x >= good_min_r
-                        && r_x <= good_max_r
-                        && c_x >= good_min_c
-                        && c_x <= good_max_c
-                    {
-                        return None;
-                    }
+    // Приоритет новой матрицы
+    let m_new_priority = matrix_priority(img_width, pieces_compatibility, &m_new);
 
-                    let (r_j, c_j) = (
-                        (r_x as isize) + shared_shift.0,
-                        (c_x as isize) + shared_shift.1,
-                    );
-                    if r_j < 0 || c_j < 0 {
-                        return None;
-                    }
-                    let (r_j_u, c_j_u) = (r_j as usize, c_j as usize);
-                    m_y.get(r_j_u).and_then(|v| v.get(c_j_u)).and_then(|x| {
-                        if x.0 == usize::MAX {
-                            None
-                        } else {
-                            Some(*x)
-                        }
-                    })
-                })
-                .collect::<Vec<_>>()
-        })
+    // Отсортированные детали новой матрицы
+    let mut tmp_new: Vec<_> = m_new
+        .into_iter()
+        .flatten()
+        .filter(|x| x.0 != usize::MAX)
         .collect();
-    tmp_y.sort();
-
-    // Проверка существования детали из области несовместимости первой матрицы во второй
-    for r_x in 0..m_x.len() {
-        for c_x in 0..m_x[r_x].len() {
-            if r_x >= good_min_r && r_x <= good_max_r && c_x >= good_min_c && c_x <= good_max_c {
-                continue;
-            }
-            if tmp_y.binary_search(&m_x[r_x][c_x]).is_ok() {
-                return MatrixCompatibility::Incompatible;
-            }
-        }
+    tmp_new.sort();
+    let tmp_new_len = tmp_new.len();
+    tmp_new.dedup();
+    // Если в матрице повторялись детали, то объединение невозможно
+    if tmp_new.len() != tmp_new_len {
+        return MatrixCompatibility::Incompatible;
     }
-    MatrixCompatibility::Compatible(shared_shift.0, shared_shift.1)
+    // Матрицы совместимы
+    MatrixCompatibility::Compatible(shared_shift_r, shared_shift_c, m_new_priority)
 }
 
 // Объединение матриц
@@ -616,47 +593,14 @@ fn merge_matrices_groups(
                     continue;
                 }
                 let order = m_x_priority < *m_y_priority;
-                let mut can_merge = if order {
-                    can_merge_matrices(&m_x, m_y)
+                let can_merge = if order {
+                    can_merge_matrices(img_width, img_height, pieces_compatibility, &m_x, m_y)
                 } else {
-                    can_merge_matrices(m_y, &m_x)
+                    can_merge_matrices(img_width, img_height, pieces_compatibility, m_y, &m_x)
                 };
 
                 let pairs_key = match can_merge {
-                    MatrixCompatibility::Compatible(shared_shift_r, shared_shift_c) => {
-                        let m_new = if order {
-                            merge_matrices(&m_x, m_y, shared_shift_r, shared_shift_c)
-                        } else {
-                            merge_matrices(m_y, &m_x, shared_shift_r, shared_shift_c)
-                        };
-                        if m_new.len() > img_height || m_new[0].len() > img_width {
-                            continue;
-                        }
-
-                        let mut lol: Vec<_> = m_new
-                            .iter()
-                            .flatten()
-                            .cloned()
-                            .filter(|x| x.0 != usize::MAX)
-                            .collect();
-                        lol.sort();
-                        let lol_len = lol.len();
-                        lol.dedup();
-                        if lol.len() != lol_len {
-                            continue;
-                        }
-
-                        if m_new == m_x || m_new == *m_y {
-                            can_merge = MatrixCompatibility::Incompatible;
-                            if order {
-                                m_x_priority
-                            } else {
-                                *m_y_priority
-                            }
-                        } else {
-                            matrix_priority(img_width, pieces_compatibility, &m_new)
-                        }
-                    }
+                    MatrixCompatibility::Compatible(_, _, m_new_priority) => m_new_priority,
                     MatrixCompatibility::Incompatible => {
                         if order {
                             m_x_priority
@@ -709,7 +653,7 @@ fn merge_matrices_groups(
             }
 
             match m_comp {
-                MatrixCompatibility::Compatible(shared_shift_r, shared_shift_c) => {
+                MatrixCompatibility::Compatible(shared_shift_r, shared_shift_c, _) => {
                     let m_new = merge_matrices(
                         &matrices_last[x_i].0,
                         &matrices_last[y_i].0,
@@ -935,7 +879,7 @@ pub fn algorithm_step(
     img_width: usize,
     img_height: usize,
     pieces_compatibility: &[Vec<Vec<f32>>; 2],
-    pieces_match_candidates: &[Vec<Vec<(usize, usize)>>; 4],
+    pieces_match_candidates: &[Vec<Vec<(usize, usize)>>; 2],
 ) -> Vec<Solution> {
     let sl_all = small_loops(img_width, img_height, pieces_match_candidates);
     println!("{:?}", sl_all.iter().map(|v| v.len()).collect::<Vec<_>>());
