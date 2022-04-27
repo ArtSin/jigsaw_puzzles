@@ -25,6 +25,7 @@ const CANDIDATE_MATCH_RATIO: f32 = 1.15;
 const CANDIDATE_MATCH_RATIO_EQUAL: f32 = 1.0001;
 const MAX_CANDIDATES: usize = 10;
 const MAX_CANDIDATES_EQUAL: usize = 7;
+const TRIM_RATE: f32 = 0.1;
 
 pub fn find_match_candidates(
     img_width: usize,
@@ -704,6 +705,67 @@ fn merge_matrices_groups(
     matrices_last.into_iter().map(|m| m.0).collect()
 }
 
+// Отрезание почти пустых краёв
+fn trim(solution_r: usize, solution_c: usize, solution: Solution) -> (usize, usize, Solution) {
+    let (mut min_r, mut max_r, mut min_c, mut max_c) = (0, solution_r - 1, 0, solution_c - 1);
+    loop {
+        // Количество непустых деталей в верхней строке
+        let up_count = (min_c..=max_c)
+            .map(|c| solution[min_r * solution_c + c])
+            .filter(|x| x.0 != usize::MAX)
+            .count() as f32;
+        // Если слишком мало, то строка вырезается
+        if up_count / ((max_c - min_c + 1) as f32) <= TRIM_RATE {
+            min_r += 1;
+        }
+
+        // Количество непустых деталей в нижней строке
+        let down_count = (min_c..=max_c)
+            .map(|c| solution[max_r * solution_c + c])
+            .filter(|x| x.0 != usize::MAX)
+            .count() as f32;
+        // Если слишком мало, то строка вырезается
+        if down_count / ((max_c - min_c + 1) as f32) <= TRIM_RATE {
+            max_r -= 1;
+        }
+
+        // Количество непустых деталей в левом столбце
+        let left_count = (min_r..=max_r)
+            .map(|r| solution[r * solution_c + min_c])
+            .filter(|x| x.0 != usize::MAX)
+            .count() as f32;
+        // Если слишком мало, то столбец вырезается
+        if left_count / ((max_r - min_r + 1) as f32) <= TRIM_RATE {
+            min_c += 1;
+        }
+
+        // Количество непустых деталей в правом столбце
+        let right_count = (min_r..=max_r)
+            .map(|r| solution[r * solution_c + max_c])
+            .filter(|x| x.0 != usize::MAX)
+            .count() as f32;
+        // Если слишком мало, то столбец вырезается
+        if right_count / ((max_r - min_r + 1) as f32) <= TRIM_RATE {
+            max_c -= 1;
+        }
+
+        break;
+    }
+
+    // Вырезание результата
+    (
+        max_r - min_r + 1,
+        max_c - min_c + 1,
+        (min_r..=max_r)
+            .flat_map(|r| {
+                (min_c..=max_c)
+                    .map(|c| solution[r * solution_c + c])
+                    .collect::<Vec<_>>()
+            })
+            .collect(),
+    )
+}
+
 fn fill_greedy(
     img_width: usize,
     img_height: usize,
@@ -1001,6 +1063,7 @@ pub fn algorithm_step(
             }
         }
     }
+    let (solution_r, solution_c, solution) = trim(solution_r, solution_c, solution);
     let new_solution = fill_greedy(
         img_width,
         img_height,
