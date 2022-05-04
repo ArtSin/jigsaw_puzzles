@@ -71,44 +71,42 @@ pub fn algorithm_next(
     request: AlgorithmDataRequest,
 ) -> Result<Command<AppMessage>, Box<dyn Error>> {
     let future = async move {
-        let res = || {
-            // Все изображения обработаны
-            if request.images_processed == images.len() {
-                return Ok(AlgorithmMessage::Finished(
-                    super::AlgorithmDataResponse::LoopConstraints(AlgorithmDataResponse {
-                        images_processed: request.images_processed,
-                        solutions: None,
-                    }),
-                ));
-            }
-            // Подготовка - вычисление совместимостей деталей
-            let pieces_compatibility = request.compatibility_measure.calculate(
-                &images[request.images_processed],
-                request.img_width,
-                request.img_height,
-                request.piece_size as usize,
-            );
-            let pieces_match_candidates =
-                find_match_candidates(request.img_width, &pieces_compatibility);
-
-            let new_solution = algorithm_step(
-                request.img_width,
-                request.img_height,
-                &pieces_compatibility,
-                &pieces_match_candidates,
-            );
-
-            Ok::<_, Box<dyn Error>>(AlgorithmMessage::Update(
+        // Все изображения обработаны
+        if request.images_processed == images.len() {
+            return Ok(AlgorithmMessage::Finished(
                 super::AlgorithmDataResponse::LoopConstraints(AlgorithmDataResponse {
-                    images_processed: request.images_processed + 1,
-                    solutions: Some(new_solution),
+                    images_processed: request.images_processed,
+                    solutions: None,
                 }),
-            ))
-        };
-        match res() {
-            Ok(message) => AppMessage::AlgorithmMessage(message),
-            Err(error) => AppMessage::AlgorithmMessage(AlgorithmMessage::Error(error.to_string())),
+            ));
         }
+        // Подготовка - вычисление совместимостей деталей
+        let pieces_compatibility = request.compatibility_measure.calculate(
+            &images[request.images_processed],
+            request.img_width,
+            request.img_height,
+            request.piece_size as usize,
+        );
+        let pieces_match_candidates =
+            find_match_candidates(request.img_width, &pieces_compatibility);
+
+        let new_solution = algorithm_step(
+            request.img_width,
+            request.img_height,
+            &pieces_compatibility,
+            &pieces_match_candidates,
+        );
+
+        Ok(AlgorithmMessage::Update(
+            super::AlgorithmDataResponse::LoopConstraints(AlgorithmDataResponse {
+                images_processed: request.images_processed + 1,
+                solutions: Some(new_solution),
+            }),
+        ))
     };
-    Ok(Command::from(future))
+    let f = |res: Result<AlgorithmMessage, Box<dyn Error>>| match res {
+        Ok(message) => AppMessage::AlgorithmMessage(message),
+        Err(error) => AppMessage::AlgorithmMessage(AlgorithmMessage::Error(error.to_string())),
+    };
+    Ok(Command::perform(future, f))
 }

@@ -89,7 +89,7 @@ impl Error for LoadImagesError {}
 
 pub fn load_images_next(request: LoadImagesRequest) -> Result<Command<AppMessage>, Box<dyn Error>> {
     let future = async {
-        let res = || match request {
+        match request {
             LoadImagesRequest::Prepare(dir_path) => {
                 let mut paths: Vec<_> = read_dir(dir_path)?
                     .filter(|dir_entry_res| {
@@ -120,13 +120,11 @@ pub fn load_images_next(request: LoadImagesRequest) -> Result<Command<AppMessage
                     },
                 )))
             }
-        };
-        match res() {
-            Ok(message) => AppMessage::LoadImagesMessage(message),
-            Err(error) => {
-                AppMessage::LoadImagesMessage(LoadImagesMessage::Error(error.to_string()))
-            }
         }
     };
-    Ok(Command::from(future))
+    let f = |res: Result<LoadImagesMessage, Box<dyn Error>>| match res {
+        Ok(message) => AppMessage::LoadImagesMessage(message),
+        Err(error) => AppMessage::LoadImagesMessage(LoadImagesMessage::Error(error.to_string())),
+    };
+    Ok(Command::perform(future, f))
 }

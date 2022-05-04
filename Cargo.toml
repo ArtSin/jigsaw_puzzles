@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-iced = { version = "0.3.0", features = ["image", "tokio"] }
-iced_aw = { git = "https://github.com/iced-rs/iced_aw", branch = "main", default-features = false, features = ["number_input", "card", "modal", "colors"] }
+iced = { version = "0.4.2", features = ["image", "tokio"] }
+iced_aw = { git = "https://github.com/genusistimelord/iced_aw", branch = "beta", default-features = false, features = ["card", "modal", "colors"] }
 native-dialog = "0.6.3"
 image = "0.24.2"
 lab = "0.11.0"

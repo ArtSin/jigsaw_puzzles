@@ -1,8 +1,9 @@
 use iced::{
-    button, executor, scrollable, Align, Application, Button, Checkbox, Clipboard, Column, Command,
-    Container, Element, HorizontalAlignment, Image, Length, Radio, Row, Scrollable, Space, Text,
+    alignment, button, executor, scrollable, text_input, Alignment, Application, Button, Checkbox,
+    Column, Command, Container, Element, Image, Length, Radio, Row, Scrollable, Space, Text,
+    TextInput,
 };
-use iced_aw::{modal, number_input, Card, Modal, NumberInput};
+use iced_aw::{modal, Card, Modal};
 
 use crate::algorithms_async::{Algorithm, AlgorithmData, AlgorithmState, CompatibilityMeasure};
 
@@ -16,10 +17,10 @@ pub struct AppUIState {
     pub error_modal_state: modal::State<ErrorModalState>,
 
     open_file_button: button::State,
-    piece_size_number_input: number_input::State,
-    generations_count_number_input: number_input::State,
-    population_size_number_input: number_input::State,
-    rand_seed_number_input: number_input::State,
+    piece_size_number_input: text_input::State,
+    generations_count_number_input: text_input::State,
+    population_size_number_input: text_input::State,
+    rand_seed_number_input: text_input::State,
     start_algorithm_button: button::State,
     save_results_button: button::State,
     save_image_button: button::State,
@@ -66,13 +67,13 @@ impl Application for AppState {
         String::from("Пазлы")
     }
 
-    fn update(&mut self, message: AppMessage, _clipboard: &mut Clipboard) -> Command<AppMessage> {
+    fn update(&mut self, message: AppMessage) -> Command<AppMessage> {
         match self.update_with_result(message) {
             Ok(command) => command,
             Err(error) => {
                 let error_text = error.to_string();
-                Command::from(async {
-                    AppMessage::ErrorModalMessage(ErrorModalMessage::OpenModal(error_text))
+                Command::perform(async {}, move |_| {
+                    AppMessage::ErrorModalMessage(ErrorModalMessage::OpenModal(error_text.clone()))
                 })
             }
         }
@@ -169,47 +170,35 @@ impl Application for AppState {
                 AppMessage::CompatibilityMeasureToggled,
             ))
             .push(Text::new("Размер детали:"))
-            .push(
-                NumberInput::new(
-                    &mut self.ui.piece_size_number_input,
-                    self.piece_size,
-                    u32::MAX,
-                    AppMessage::PieceSizeChanged,
-                )
-                .width(Length::Fill),
-            );
+            .push(TextInput::new(
+                &mut self.ui.piece_size_number_input,
+                "",
+                &self.piece_size.to_string(),
+                AppMessage::PieceSizeChanged,
+            ));
         let menu_column = match self.algorithm {
             Algorithm::Genetic => menu_column
                 .push(Text::new("Количество поколений:"))
-                .push(
-                    NumberInput::new(
-                        &mut self.ui.generations_count_number_input,
-                        self.generations_count,
-                        10000,
-                        AppMessage::GenerationsCountChanged,
-                    )
-                    .width(Length::Fill),
-                )
+                .push(TextInput::new(
+                    &mut self.ui.generations_count_number_input,
+                    "",
+                    &self.generations_count.to_string(),
+                    AppMessage::GenerationsCountChanged,
+                ))
                 .push(Text::new("Размер популяции:"))
-                .push(
-                    NumberInput::new(
-                        &mut self.ui.population_size_number_input,
-                        self.population_size,
-                        10000,
-                        AppMessage::PopulationSizeChanged,
-                    )
-                    .width(Length::Fill),
-                )
+                .push(TextInput::new(
+                    &mut self.ui.population_size_number_input,
+                    "",
+                    &self.population_size.to_string(),
+                    AppMessage::PopulationSizeChanged,
+                ))
                 .push(Text::new("Начальное значение ГПСЧ:"))
-                .push(
-                    NumberInput::new(
-                        &mut self.ui.rand_seed_number_input,
-                        self.rand_seed,
-                        u64::MAX,
-                        AppMessage::RandSeedChanged,
-                    )
-                    .width(Length::Fill),
-                ),
+                .push(TextInput::new(
+                    &mut self.ui.rand_seed_number_input,
+                    "",
+                    &self.rand_seed.to_string(),
+                    AppMessage::RandSeedChanged,
+                )),
             Algorithm::LoopConstraints => menu_column,
         };
         let menu_column = menu_column
@@ -301,7 +290,7 @@ impl Application for AppState {
                     Container::new(
                         Row::new()
                             .spacing(10)
-                            .align_items(Align::Center)
+                            .align_items(Alignment::Center)
                             .push({
                                 let button = Button::new(
                                     &mut self.ui.first_generation_button,
@@ -338,7 +327,7 @@ impl Application for AppState {
                                     self.ui.main_image_selected_generation.unwrap() + 1,
                                     gen_cnt
                                 ))
-                                .horizontal_alignment(HorizontalAlignment::Center),
+                                .horizontal_alignment(alignment::Horizontal::Center),
                             )
                             .push({
                                 let button = Button::new(
@@ -378,7 +367,7 @@ impl Application for AppState {
                     Container::new(
                         Row::new()
                             .spacing(10)
-                            .align_items(Align::Center)
+                            .align_items(Alignment::Center)
                             .push(Checkbox::new(
                                 self.ui.show_incorrect_pieces,
                                 "Показывать неправильные",
@@ -401,7 +390,7 @@ impl Application for AppState {
                     .center_x(),
                 )
                 .push(
-                    Container::new(Row::new().spacing(10).align_items(Align::Center).push(
+                    Container::new(Row::new().spacing(10).align_items(Alignment::Center).push(
                         Text::new(format!(
                             "Прямое сравнение: {:.2}%, сравнение по соседям: {:.2}%",
                             self.ui.main_image_direct_comparison,
@@ -433,11 +422,7 @@ impl Application for AppState {
                     let button = Button::new(
                         image_button,
                         Column::new()
-                            .push(
-                                Image::new(image_handle.clone())
-                                    .width(Length::Fill)
-                                    .height(Length::Fill),
-                            )
+                            .push(Image::new(image_handle.clone()).width(Length::Fill))
                             .push(
                                 Container::new(Text::new(image_name))
                                     .width(Length::Fill)
@@ -472,7 +457,7 @@ impl Application for AppState {
                     Row::new().spacing(10).padding(5).width(Length::Fill).push(
                         Button::new(
                             &mut state.ok_state,
-                            Text::new("Ок").horizontal_alignment(HorizontalAlignment::Center),
+                            Text::new("Ок").horizontal_alignment(alignment::Horizontal::Center),
                         )
                         .width(Length::Fill)
                         .on_press(AppMessage::ErrorModalMessage(

@@ -56,10 +56,10 @@ pub enum AppMessage {
     LastGenerationPressed,
     ImagesButtonPressed(usize),
 
-    PieceSizeChanged(u32),
-    GenerationsCountChanged(usize),
-    PopulationSizeChanged(usize),
-    RandSeedChanged(u64),
+    PieceSizeChanged(String),
+    GenerationsCountChanged(String),
+    PopulationSizeChanged(String),
+    RandSeedChanged(String),
 
     LoadImagesMessage(LoadImagesMessage),
     AlgorithmMessage(AlgorithmMessage),
@@ -388,19 +388,19 @@ impl AppState {
             }
 
             AppMessage::PieceSizeChanged(num) => {
-                self.piece_size = num;
+                self.piece_size = num.parse()?;
                 Ok(Command::none())
             }
             AppMessage::GenerationsCountChanged(num) => {
-                self.generations_count = num;
+                self.generations_count = num.parse()?;
                 Ok(Command::none())
             }
             AppMessage::PopulationSizeChanged(num) => {
-                self.population_size = num;
+                self.population_size = num.parse()?;
                 Ok(Command::none())
             }
             AppMessage::RandSeedChanged(seed) => {
-                self.rand_seed = seed;
+                self.rand_seed = seed.parse()?;
                 Ok(Command::none())
             }
 

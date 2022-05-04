@@ -121,84 +121,82 @@ pub fn algorithm_next(
     mut request: AlgorithmDataRequest,
 ) -> Result<Command<AppMessage>, Box<dyn Error>> {
     let future = async move {
-        let res = || {
-            // Все изображения обработаны
-            if request.images_processed == images.len() {
-                return Ok(AlgorithmMessage::Finished(
-                    super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
-                        rng: request.rng,
-                        images_processed: request.images_processed,
-                        image_generations_processed: request.image_generations_processed,
-                        pieces_compatibility: None,
-                        pieces_buddies: None,
-                        current_generation: None,
-                        best_chromosome: None,
-                    }),
-                ));
-            }
-            // Все поколения изображения обработаны
-            if request.image_generations_processed == request.generations_count {
-                return Ok(AlgorithmMessage::Update(
-                    super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
-                        rng: request.rng,
-                        images_processed: request.images_processed + 1,
-                        image_generations_processed: 0,
-                        pieces_compatibility: Some([Vec::new(), Vec::new()]),
-                        pieces_buddies: Some([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
-                        current_generation: None,
-                        best_chromosome: None,
-                    }),
-                ));
-            }
-            // Подготовка - вычисление совместимостей деталей
-            if !request.image_prepared {
-                let pieces_compatibility = request.compatibility_measure.calculate(
-                    &images[request.images_processed],
-                    request.img_width,
-                    request.img_height,
-                    request.piece_size as usize,
-                );
-                let pieces_buddies = find_best_buddies(request.img_width, &pieces_compatibility);
-                return Ok(AlgorithmMessage::Update(
-                    super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
-                        rng: request.rng,
-                        images_processed: request.images_processed,
-                        image_generations_processed: request.image_generations_processed,
-                        pieces_compatibility: Some(pieces_compatibility),
-                        pieces_buddies: Some(pieces_buddies),
-                        current_generation: None,
-                        best_chromosome: None,
-                    }),
-                ));
-            }
-
-            let new_generation = algorithm_step(
-                request.population_size,
-                &mut request.rng,
-                request.img_width,
-                request.img_height,
-                request.image_generations_processed,
-                &request.pieces_compatibility,
-                &request.pieces_buddies,
-                &request.current_generation,
-            );
-
-            Ok::<_, Box<dyn Error>>(AlgorithmMessage::Update(
+        // Все изображения обработаны
+        if request.images_processed == images.len() {
+            return Ok(AlgorithmMessage::Finished(
                 super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
                     rng: request.rng,
                     images_processed: request.images_processed,
-                    image_generations_processed: request.image_generations_processed + 1,
+                    image_generations_processed: request.image_generations_processed,
                     pieces_compatibility: None,
                     pieces_buddies: None,
-                    best_chromosome: Some(new_generation[0].clone()),
-                    current_generation: Some(new_generation),
+                    current_generation: None,
+                    best_chromosome: None,
                 }),
-            ))
-        };
-        match res() {
-            Ok(message) => AppMessage::AlgorithmMessage(message),
-            Err(error) => AppMessage::AlgorithmMessage(AlgorithmMessage::Error(error.to_string())),
+            ));
         }
+        // Все поколения изображения обработаны
+        if request.image_generations_processed == request.generations_count {
+            return Ok(AlgorithmMessage::Update(
+                super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
+                    rng: request.rng,
+                    images_processed: request.images_processed + 1,
+                    image_generations_processed: 0,
+                    pieces_compatibility: Some([Vec::new(), Vec::new()]),
+                    pieces_buddies: Some([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
+                    current_generation: None,
+                    best_chromosome: None,
+                }),
+            ));
+        }
+        // Подготовка - вычисление совместимостей деталей
+        if !request.image_prepared {
+            let pieces_compatibility = request.compatibility_measure.calculate(
+                &images[request.images_processed],
+                request.img_width,
+                request.img_height,
+                request.piece_size as usize,
+            );
+            let pieces_buddies = find_best_buddies(request.img_width, &pieces_compatibility);
+            return Ok(AlgorithmMessage::Update(
+                super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
+                    rng: request.rng,
+                    images_processed: request.images_processed,
+                    image_generations_processed: request.image_generations_processed,
+                    pieces_compatibility: Some(pieces_compatibility),
+                    pieces_buddies: Some(pieces_buddies),
+                    current_generation: None,
+                    best_chromosome: None,
+                }),
+            ));
+        }
+
+        let new_generation = algorithm_step(
+            request.population_size,
+            &mut request.rng,
+            request.img_width,
+            request.img_height,
+            request.image_generations_processed,
+            &request.pieces_compatibility,
+            &request.pieces_buddies,
+            &request.current_generation,
+        );
+
+        Ok(AlgorithmMessage::Update(
+            super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
+                rng: request.rng,
+                images_processed: request.images_processed,
+                image_generations_processed: request.image_generations_processed + 1,
+                pieces_compatibility: None,
+                pieces_buddies: None,
+                best_chromosome: Some(new_generation[0].clone()),
+                current_generation: Some(new_generation),
+            }),
+        ))
     };
-    Ok(Command::from(future))
+    let f = |res: Result<AlgorithmMessage, Box<dyn Error>>| match res {
+        Ok(message) => AppMessage::AlgorithmMessage(message),
+        Err(error) => AppMessage::AlgorithmMessage(AlgorithmMessage::Error(error.to_string())),
+    };
+    Ok(Command::perform(future, f))
 }
