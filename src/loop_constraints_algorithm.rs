@@ -594,29 +594,40 @@ fn merge_matrices_groups(
         let m_x_i = matrices_last.len();
         let m_x_priority = matrix_priority(img_width, pieces_compatibility, &m_x);
         if check {
-            for (m_y_i, (m_y, m_y_priority)) in matrices_last.iter().enumerate() {
-                if used[m_y_i] {
-                    continue;
-                }
-                let order = m_x_priority < *m_y_priority;
-                let can_merge = if order {
-                    can_merge_matrices(img_width, img_height, pieces_compatibility, &m_x, m_y)
-                } else {
-                    can_merge_matrices(img_width, img_height, pieces_compatibility, m_y, &m_x)
-                };
-
-                let pairs_key = match can_merge {
-                    MatrixCompatibility::Compatible(_, _, m_new_priority) => m_new_priority,
-                    MatrixCompatibility::Incompatible => {
-                        if order {
-                            m_x_priority
-                        } else {
-                            *m_y_priority
-                        }
+            let tmp: Vec<_> = matrices_last
+                .par_iter()
+                .enumerate()
+                .filter_map(|(m_y_i, (m_y, m_y_priority))| {
+                    if used[m_y_i] {
+                        return None;
                     }
-                    MatrixCompatibility::NotRelated => continue,
-                };
+                    let order = m_x_priority < *m_y_priority;
+                    let can_merge = if order {
+                        can_merge_matrices(img_width, img_height, pieces_compatibility, &m_x, m_y)
+                    } else {
+                        can_merge_matrices(img_width, img_height, pieces_compatibility, m_y, &m_x)
+                    };
 
+                    let pairs_key = match can_merge {
+                        MatrixCompatibility::Compatible(_, _, m_new_priority) => m_new_priority,
+                        MatrixCompatibility::Incompatible => {
+                            if order {
+                                m_x_priority
+                            } else {
+                                *m_y_priority
+                            }
+                        }
+                        MatrixCompatibility::NotRelated => return None,
+                    };
+
+                    if order {
+                        Some((pairs_key, (can_merge, m_x_i, m_y_i)))
+                    } else {
+                        Some((pairs_key, (can_merge, m_y_i, m_x_i)))
+                    }
+                })
+                .collect();
+            for (pairs_key, x) in tmp {
                 let v = match available_pairs.get_mut(&pairs_key) {
                     Some(v) => v,
                     None => {
@@ -624,11 +635,7 @@ fn merge_matrices_groups(
                         available_pairs.get_mut(&pairs_key).unwrap()
                     }
                 };
-                if order {
-                    v.push((can_merge, m_x_i, m_y_i));
-                } else {
-                    v.push((can_merge, m_y_i, m_x_i));
-                }
+                v.push(x);
             }
         }
         used.push(false);
