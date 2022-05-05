@@ -141,7 +141,7 @@ pub fn find_match_candidates(
 
 fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
     let right_matches = sl
-        .iter()
+        .par_iter()
         .map(|sl_left| {
             sl.iter()
                 .enumerate()
@@ -167,7 +167,7 @@ fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
         .collect::<Vec<_>>();
 
     let down_matches = sl
-        .iter()
+        .par_iter()
         .map(|sl_up| {
             sl.iter()
                 .enumerate()
@@ -248,6 +248,7 @@ fn small_loops(
     let sl_1 = sl_1_right.chain(sl_1_down).collect::<Vec<_>>();
 
     let sl_2 = (0..img_height)
+        .into_par_iter()
         .flat_map(|left_up_r| {
             (0..img_width)
                 .flat_map(|left_up_c| {
@@ -308,6 +309,7 @@ fn small_loops(
         let sl_size = sl_all.len();
         let matches = small_loops_matches(sl_size, sl_last);
         let sl_next = (0..sl_last.len())
+            .into_par_iter()
             .flat_map(|left_up_i| {
                 matches[0][left_up_i]
                     .iter()
