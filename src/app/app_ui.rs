@@ -1,7 +1,8 @@
 use iced::{
-    alignment, button, executor, scrollable, text_input, Alignment, Application, Button, Checkbox,
-    Column, Command, Container, Element, Image, Length, Radio, Row, Scrollable, Space, Text,
-    TextInput,
+    alignment, button, executor,
+    image::{viewer, Viewer},
+    scrollable, text_input, Alignment, Application, Button, Checkbox, Column, Command, Container,
+    Element, Image, Length, Radio, Row, Scrollable, Space, Text, TextInput,
 };
 use iced_aw::{modal, Card, Modal};
 
@@ -25,6 +26,7 @@ pub struct AppUIState {
     save_results_button: button::State,
     save_image_button: button::State,
 
+    main_image_viewer: viewer::State,
     pub main_image_selected_image: Option<usize>,
     pub main_image_selected_generation: Option<usize>,
     pub main_image_handle: Option<iced::image::Handle>,
@@ -274,19 +276,24 @@ impl Application for AppState {
                 _ => unreachable!(),
             };
 
-            main_image_column = main_image_column
-                .push(
-                    Container::new(
-                        Image::new(self.ui.main_image_handle.clone().unwrap())
-                            .width(Length::Fill)
-                            .height(Length::Fill),
+            main_image_column = main_image_column.push(
+                Container::new(
+                    Viewer::new(
+                        &mut self.ui.main_image_viewer,
+                        self.ui.main_image_handle.clone().unwrap(),
                     )
+                    .min_scale(1.0)
                     .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_x()
-                    .center_y(),
+                    .height(Length::Fill),
                 )
-                .push(
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y(),
+            );
+
+            if gen_cnt > 1 {
+                main_image_column = main_image_column.push(
                     Container::new(
                         Row::new()
                             .spacing(10)
@@ -362,7 +369,10 @@ impl Application for AppState {
                     )
                     .width(Length::Fill)
                     .center_x(),
-                )
+                );
+            }
+
+            main_image_column = main_image_column
                 .push(
                     Container::new(
                         Row::new()

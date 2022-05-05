@@ -717,6 +717,7 @@ fn trim(solution_r: usize, solution_c: usize, solution: Solution) -> (usize, usi
         // Если слишком мало, то строка вырезается
         if up_count / ((max_c - min_c + 1) as f32) <= TRIM_RATE {
             min_r += 1;
+            continue;
         }
 
         // Количество непустых деталей в нижней строке
@@ -727,6 +728,7 @@ fn trim(solution_r: usize, solution_c: usize, solution: Solution) -> (usize, usi
         // Если слишком мало, то строка вырезается
         if down_count / ((max_c - min_c + 1) as f32) <= TRIM_RATE {
             max_r -= 1;
+            continue;
         }
 
         // Количество непустых деталей в левом столбце
@@ -737,6 +739,7 @@ fn trim(solution_r: usize, solution_c: usize, solution: Solution) -> (usize, usi
         // Если слишком мало, то столбец вырезается
         if left_count / ((max_r - min_r + 1) as f32) <= TRIM_RATE {
             min_c += 1;
+            continue;
         }
 
         // Количество непустых деталей в правом столбце
@@ -747,6 +750,7 @@ fn trim(solution_r: usize, solution_c: usize, solution: Solution) -> (usize, usi
         // Если слишком мало, то столбец вырезается
         if right_count / ((max_r - min_r + 1) as f32) <= TRIM_RATE {
             max_c -= 1;
+            continue;
         }
 
         break;
