@@ -193,17 +193,17 @@ impl Application for AppState {
                     "",
                     &self.population_size.to_string(),
                     AppMessage::PopulationSizeChanged,
-                ))
-                .push(Text::new("Начальное значение ГПСЧ:"))
-                .push(TextInput::new(
-                    &mut self.ui.rand_seed_number_input,
-                    "",
-                    &self.rand_seed.to_string(),
-                    AppMessage::RandSeedChanged,
                 )),
             Algorithm::LoopConstraints => menu_column,
         };
         let menu_column = menu_column
+            .push(Text::new("Начальное значение ГПСЧ:"))
+            .push(TextInput::new(
+                &mut self.ui.rand_seed_number_input,
+                "",
+                &self.rand_seed.to_string(),
+                AppMessage::RandSeedChanged,
+            ))
             .push({
                 let button = Button::new(
                     &mut self.ui.start_algorithm_button,
@@ -265,14 +265,7 @@ impl Application for AppState {
 
         if self.ui.main_image_selected_image.is_some() {
             let gen_cnt = match &self.algorithm_state {
-                AlgorithmState::Finished(algorithm_data) => match algorithm_data {
-                    AlgorithmData::Genetic(algorithm_data) => algorithm_data.best_chromosomes
-                        [self.ui.main_image_selected_image.unwrap()]
-                    .len(),
-                    AlgorithmData::LoopConstraints(algorithm_data) => {
-                        algorithm_data.solutions[self.ui.main_image_selected_image.unwrap()].len()
-                    }
-                },
+                AlgorithmState::Finished(algorithm_data) => algorithm_data.generations_count(),
                 _ => unreachable!(),
             };
 

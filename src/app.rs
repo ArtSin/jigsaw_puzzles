@@ -118,20 +118,6 @@ impl AppState {
             AlgorithmState::Finished(algorithm_data) => algorithm_data,
             _ => unreachable!(),
         };
-        let (gen_cnt, img_width, img_height, solutions) = match algorithm_data {
-            AlgorithmData::Genetic(algorithm_data) => (
-                algorithm_data.generations_count,
-                algorithm_data.img_width,
-                algorithm_data.img_height,
-                &algorithm_data.best_chromosomes,
-            ),
-            AlgorithmData::LoopConstraints(algorithm_data) => (
-                1,
-                algorithm_data.img_width,
-                algorithm_data.img_height,
-                &algorithm_data.solutions,
-            ),
-        };
 
         let file_path_option = FileDialog::new()
             .add_filter("Таблица (.csv)", &["csv"])
@@ -152,19 +138,23 @@ impl AppState {
         }
         writeln!(writer)?;
 
-        for gen in 0..gen_cnt {
-            for image_solutions in solutions {
+        for gen in 0..algorithm_data.generations_count() {
+            for image_solutions in algorithm_data.solutions() {
                 write!(
                     writer,
                     "{:.2},",
-                    image_direct_comparison(img_width, &image_solutions[gen])
+                    image_direct_comparison(algorithm_data.img_width(), &image_solutions[gen])
                 )?;
             }
-            for (image_i, image_solutions) in solutions.iter().enumerate() {
+            for (image_i, image_solutions) in algorithm_data.solutions().iter().enumerate() {
                 write!(
                     writer,
                     "{:.2}",
-                    image_neighbour_comparison(img_width, img_height, &image_solutions[gen])
+                    image_neighbour_comparison(
+                        algorithm_data.img_width(),
+                        algorithm_data.img_height(),
+                        &image_solutions[gen]
+                    )
                 )?;
                 if image_i != images_data.loaded - 1 {
                     write!(writer, ",")?;
@@ -185,18 +175,6 @@ impl AppState {
             AlgorithmState::Finished(algorithm_data) => algorithm_data,
             _ => unreachable!(),
         };
-        let (img_width, img_height, solutions) = match algorithm_data {
-            AlgorithmData::Genetic(algorithm_data) => (
-                algorithm_data.img_width,
-                algorithm_data.img_height,
-                &algorithm_data.best_chromosomes,
-            ),
-            AlgorithmData::LoopConstraints(algorithm_data) => (
-                algorithm_data.img_width,
-                algorithm_data.img_height,
-                &algorithm_data.solutions,
-            ),
-        };
 
         let file_path_option = FileDialog::new()
             .add_filter(
@@ -213,9 +191,9 @@ impl AppState {
         let image = get_solution_image(
             &images_data.images[image_i],
             self.piece_size,
-            img_width,
-            img_height,
-            &solutions[image_i][gen],
+            algorithm_data.img_width(),
+            algorithm_data.img_height(),
+            &algorithm_data.solutions()[image_i][gen],
             self.ui.show_incorrect_pieces,
             self.ui.show_incorrect_direct_neighbour,
         );
@@ -223,8 +201,8 @@ impl AppState {
         Ok(Command::none())
     }
 
-    pub fn algorithm_start(&self) -> Result<Command<AppMessage>, Box<dyn Error>> {
-        let images_data = match &self.load_images_state {
+    pub fn algorithm_start(&mut self) -> Result<Command<AppMessage>, Box<dyn Error>> {
+        let images_data = match &mut self.load_images_state {
             LoadImagesState::Loaded(images_data) => images_data,
             _ => unreachable!(),
         };
@@ -252,6 +230,9 @@ impl AppState {
             (image_height / self.piece_size) as usize,
         );
 
+        let mut rng = Xoshiro256PlusPlus::seed_from_u64(self.rand_seed);
+        images_data.shuffle_images(self.piece_size, img_width, img_height, &mut rng);
+
         let algorithm_data = match self.algorithm {
             Algorithm::Genetic => {
                 AlgorithmDataRequest::Genetic(genetic_algorithm::AlgorithmDataRequest {
@@ -259,7 +240,7 @@ impl AppState {
                     piece_size: self.piece_size,
                     generations_count: self.generations_count,
                     population_size: self.population_size,
-                    rng: Xoshiro256PlusPlus::seed_from_u64(self.rand_seed),
+                    rng,
                     img_width,
                     img_height,
                     images_processed: 0,
@@ -274,6 +255,7 @@ impl AppState {
                 loop_constraints_algorithm::AlgorithmDataRequest {
                     compatibility_measure: self.compatibility_measure,
                     piece_size: self.piece_size,
+                    rng,
                     img_width,
                     img_height,
                     images_processed: 0,
@@ -295,35 +277,28 @@ impl AppState {
             AlgorithmState::Finished(algorithm_data) => algorithm_data,
             _ => unreachable!(),
         };
-        let (img_width, img_height, solutions) = match algorithm_data {
-            AlgorithmData::Genetic(algorithm_data) => (
-                algorithm_data.img_width,
-                algorithm_data.img_height,
-                &algorithm_data.best_chromosomes,
-            ),
-            AlgorithmData::LoopConstraints(algorithm_data) => (
-                algorithm_data.img_width,
-                algorithm_data.img_height,
-                &algorithm_data.solutions,
-            ),
-        };
 
         let image_i = self.ui.main_image_selected_image.unwrap();
         let gen = self.ui.main_image_selected_generation.unwrap();
         let new_image = get_solution_image(
             &images_data.images[image_i],
             self.piece_size,
-            img_width,
-            img_height,
-            &solutions[image_i][gen],
+            algorithm_data.img_width(),
+            algorithm_data.img_height(),
+            &algorithm_data.solutions()[image_i][gen],
             self.ui.show_incorrect_pieces,
             self.ui.show_incorrect_direct_neighbour,
         );
         self.ui.main_image_handle = Some(get_image_handle(&new_image));
-        self.ui.main_image_direct_comparison =
-            image_direct_comparison(img_width, &solutions[image_i][gen]);
-        self.ui.main_image_neighbour_comparison =
-            image_neighbour_comparison(img_width, img_height, &solutions[image_i][gen]);
+        self.ui.main_image_direct_comparison = image_direct_comparison(
+            algorithm_data.img_width(),
+            &algorithm_data.solutions()[image_i][gen],
+        );
+        self.ui.main_image_neighbour_comparison = image_neighbour_comparison(
+            algorithm_data.img_width(),
+            algorithm_data.img_height(),
+            &algorithm_data.solutions()[image_i][gen],
+        );
         Ok(Command::none())
     }
 
@@ -368,14 +343,7 @@ impl AppState {
             }
             AppMessage::LastGenerationPressed => {
                 let gen_cnt = match &self.algorithm_state {
-                    AlgorithmState::Finished(algorithm_data) => match algorithm_data {
-                        AlgorithmData::Genetic(algorithm_data) => algorithm_data.best_chromosomes
-                            [self.ui.main_image_selected_image.unwrap()]
-                        .len(),
-                        AlgorithmData::LoopConstraints(algorithm_data) => algorithm_data.solutions
-                            [self.ui.main_image_selected_image.unwrap()]
-                        .len(),
-                    },
+                    AlgorithmState::Finished(algorithm_data) => algorithm_data.generations_count(),
                     _ => unreachable!(),
                 };
                 self.ui.main_image_selected_generation = Some(gen_cnt - 1);
@@ -474,21 +442,29 @@ impl AppState {
                             AlgorithmData::create_from_request(request.clone()),
                         );
                         self.ui.reset_state(false);
-                        algorithm_next(Arc::clone(&images_data.images), request)
+                        algorithm_next(Arc::clone(&images_data.shuffled_images), request)
                     }
                     AlgorithmMessage::Update(response) => match &mut self.algorithm_state {
                         AlgorithmState::Running(data) => {
                             data.update_with_response(response);
-                            algorithm_next(Arc::clone(&images_data.images), data.create_request())
+                            algorithm_next(
+                                Arc::clone(&images_data.shuffled_images),
+                                data.create_request(),
+                            )
                         }
                         _ => unreachable!(),
                     },
                     AlgorithmMessage::Finished(response) => {
+                        let images_data = match &self.load_images_state {
+                            LoadImagesState::Loaded(images_data) => images_data,
+                            _ => unreachable!(),
+                        };
                         let mut state = AlgorithmState::NotStarted;
                         swap(&mut state, &mut self.algorithm_state);
                         state = AlgorithmState::Finished(match state {
                             AlgorithmState::Running(mut data) => {
                                 data.update_with_response(response);
+                                data.apply_permutations_to_solutions(&images_data.permutations);
                                 data
                             }
                             _ => unreachable!(),

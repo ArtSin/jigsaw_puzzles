@@ -2,7 +2,12 @@ use std::{error::Error, fmt::Display, fs::read_dir, mem::swap, path::PathBuf, sy
 
 use iced::Command;
 use image::RgbaImage;
-use jigsaw_puzzles::image_processing::get_image_handle;
+use jigsaw_puzzles::{
+    generate_random_solution,
+    image_processing::{get_image_handle, get_solution_image},
+    Solution,
+};
+use rand::Rng;
 
 use super::AppMessage;
 
@@ -32,6 +37,8 @@ pub struct LoadImagesData {
     pub images_names: Vec<String>,
     pub images_handles: Vec<iced::image::Handle>,
     pub loaded: usize,
+    pub shuffled_images: Arc<Vec<RgbaImage>>,
+    pub permutations: Vec<Solution>,
 }
 
 impl LoadImagesData {
@@ -42,6 +49,8 @@ impl LoadImagesData {
             images_names: Vec::new(),
             images_handles: Vec::new(),
             loaded: 0,
+            shuffled_images: Arc::new(Vec::new()),
+            permutations: Vec::new(),
         }
     }
 
@@ -54,6 +63,37 @@ impl LoadImagesData {
         self.images_names.push(response_data.image_name);
         self.images_handles.push(response_data.image_handle);
         self.loaded += 1;
+    }
+
+    pub fn shuffle_images<T: Rng>(
+        &mut self,
+        piece_size: u32,
+        img_width: usize,
+        img_height: usize,
+        rng: &mut T,
+    ) {
+        self.permutations = (0..self.loaded)
+            .map(|_| generate_random_solution(img_width, img_height, rng))
+            .collect();
+
+        let mut tmp = Arc::new(
+            self.images
+                .iter()
+                .zip(self.permutations.iter())
+                .map(|(image, permutation)| {
+                    get_solution_image(
+                        image,
+                        piece_size,
+                        img_width,
+                        img_height,
+                        permutation,
+                        false,
+                        false,
+                    )
+                })
+                .collect(),
+        );
+        swap(&mut tmp, &mut self.shuffled_images);
     }
 }
 
@@ -99,7 +139,7 @@ pub fn load_images_next(request: LoadImagesRequest) -> Result<Command<AppMessage
                     .collect::<Result<_, _>>()?;
                 alphanumeric_sort::sort_path_slice(&mut paths);
 
-                Ok::<_, Box<dyn Error>>(LoadImagesMessage::Update(LoadImagesResponse::Prepared(
+                Ok(LoadImagesMessage::Update(LoadImagesResponse::Prepared(
                     paths,
                 )))
             }

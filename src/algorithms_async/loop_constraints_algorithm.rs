@@ -6,6 +6,7 @@ use jigsaw_puzzles::{
     loop_constraints_algorithm::{algorithm_step, find_match_candidates},
     Solution,
 };
+use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::app::AppMessage;
 
@@ -15,6 +16,7 @@ use super::{AlgorithmMessage, CompatibilityMeasure};
 pub struct AlgorithmDataRequest {
     pub compatibility_measure: CompatibilityMeasure,
     pub piece_size: u32,
+    pub rng: Xoshiro256PlusPlus,
     pub img_width: usize,
     pub img_height: usize,
     pub images_processed: usize,
@@ -30,6 +32,7 @@ pub struct AlgorithmDataResponse {
 pub struct AlgorithmData {
     pub compatibility_measure: CompatibilityMeasure,
     pub piece_size: u32,
+    pub rng: Xoshiro256PlusPlus,
     pub img_width: usize,
     pub img_height: usize,
     pub images_processed: usize,
@@ -41,6 +44,7 @@ impl AlgorithmData {
         AlgorithmDataRequest {
             compatibility_measure: self.compatibility_measure,
             piece_size: self.piece_size,
+            rng: self.rng.clone(),
             img_width: self.img_width,
             img_height: self.img_height,
             images_processed: self.images_processed,
@@ -51,6 +55,7 @@ impl AlgorithmData {
         Self {
             compatibility_measure: request.compatibility_measure,
             piece_size: request.piece_size,
+            rng: request.rng,
             img_width: request.img_width,
             img_height: request.img_height,
             images_processed: request.images_processed,

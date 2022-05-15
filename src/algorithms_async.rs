@@ -2,7 +2,8 @@ use std::{error::Error, fmt::Display, sync::Arc};
 
 use iced::Command;
 use image::RgbaImage;
-use jigsaw_puzzles::{calculate_lab_ssd, calculate_mgc};
+use jigsaw_puzzles::{apply_permutation_to_solution, calculate_lab_ssd, calculate_mgc, Solution};
+use rand_xoshiro::Xoshiro256PlusPlus;
 
 use crate::app::AppMessage;
 
@@ -55,6 +56,55 @@ pub enum AlgorithmData {
 }
 
 impl AlgorithmData {
+    pub fn piece_size(&self) -> u32 {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => algorithm_data.piece_size,
+            AlgorithmData::LoopConstraints(algorithm_data) => algorithm_data.piece_size,
+        }
+    }
+
+    pub fn generations_count(&self) -> usize {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => algorithm_data.generations_count,
+            AlgorithmData::LoopConstraints(_) => 1,
+        }
+    }
+
+    pub fn rng(&self) -> &Xoshiro256PlusPlus {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => &algorithm_data.rng,
+            AlgorithmData::LoopConstraints(algorithm_data) => &algorithm_data.rng,
+        }
+    }
+
+    pub fn img_width(&self) -> usize {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => algorithm_data.img_width,
+            AlgorithmData::LoopConstraints(algorithm_data) => algorithm_data.img_width,
+        }
+    }
+
+    pub fn img_height(&self) -> usize {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => algorithm_data.img_height,
+            AlgorithmData::LoopConstraints(algorithm_data) => algorithm_data.img_height,
+        }
+    }
+
+    pub fn solutions(&self) -> &Vec<Vec<Solution>> {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => &algorithm_data.best_chromosomes,
+            AlgorithmData::LoopConstraints(algorithm_data) => &algorithm_data.solutions,
+        }
+    }
+
+    fn solutions_mut(&mut self) -> &mut Vec<Vec<Solution>> {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => &mut algorithm_data.best_chromosomes,
+            AlgorithmData::LoopConstraints(algorithm_data) => &mut algorithm_data.solutions,
+        }
+    }
+
     pub fn create_request(&self) -> AlgorithmDataRequest {
         match self {
             Self::Genetic(algorithm_data) => {
@@ -87,6 +137,20 @@ impl AlgorithmData {
                 AlgorithmDataResponse::LoopConstraints(response),
             ) => algorithm_data.update_with_response(response),
             _ => unreachable!(),
+        }
+    }
+
+    pub fn apply_permutations_to_solutions(&mut self, permutations: &[Solution]) {
+        let (img_width, img_height) = (self.img_width(), self.img_height());
+        for (img_solutions, permutation) in self.solutions_mut().iter_mut().zip(permutations.iter())
+        {
+            let mut new_img_solutions: Vec<_> = img_solutions
+                .iter()
+                .map(|solution| {
+                    apply_permutation_to_solution(img_width, img_height, solution, permutation)
+                })
+                .collect();
+            img_solutions.swap_with_slice(&mut new_img_solutions);
         }
     }
 }

@@ -17,12 +17,33 @@ pub type Solution = Vec<(usize, usize)>;
 const NEIGHBOUR_DIRECTIONS: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
 // Создание случайного решения
-fn generate_random_solution<T: Rng>(img_width: usize, img_height: usize, rng: &mut T) -> Solution {
+pub fn generate_random_solution<T: Rng>(
+    img_width: usize,
+    img_height: usize,
+    rng: &mut T,
+) -> Solution {
     let mut rand_nums: Vec<_> = (0..img_height)
         .flat_map(|r| (0..img_width).map(move |c| (r, c)))
         .collect();
     rand_nums.shuffle(rng);
     rand_nums
+}
+
+// Применение перестановки к решению
+pub fn apply_permutation_to_solution(
+    img_width: usize,
+    img_height: usize,
+    solution: &Solution,
+    permutation: &Solution,
+) -> Solution {
+    let mut new_solution = vec![(usize::MAX, usize::MAX); img_width * img_height];
+    for r in 0..img_height {
+        for c in 0..img_width {
+            let (pos_r, pos_c) = solution[r * img_width + c];
+            new_solution[r * img_width + c] = permutation[pos_r * img_width + pos_c];
+        }
+    }
+    new_solution
 }
 
 // Вычисление SSD (sum of squared differences, сумма квадратов разностей)
