@@ -23,6 +23,7 @@ use crate::algorithms_async::{
 
 mod app_ui;
 mod images_loader;
+mod style;
 
 pub struct AppState {
     algorithm: Algorithm,
@@ -90,7 +91,7 @@ impl Default for AppState {
             load_images_state: LoadImagesState::NotLoaded,
             algorithm_state: AlgorithmState::NotStarted,
             algorithm_start_time: None,
-            ui: Default::default(),
+            ui: AppUIState::new(),
         }
     }
 }

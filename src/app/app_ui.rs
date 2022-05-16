@@ -1,3 +1,5 @@
+use std::env;
+
 use iced::{
     alignment, button, executor,
     image::{viewer, Viewer},
@@ -9,11 +11,14 @@ use iced_aw::{modal, Card, Modal};
 use crate::algorithms_async::{Algorithm, AlgorithmData, AlgorithmState, CompatibilityMeasure};
 
 use super::{
-    images_loader::LoadImagesState, AppMessage, AppState, ErrorModalMessage, ErrorModalState,
+    images_loader::LoadImagesState, style::Theme, AppMessage, AppState, ErrorModalMessage,
+    ErrorModalState,
 };
 
 #[derive(Default)]
 pub struct AppUIState {
+    curr_theme: Theme,
+
     pub error_modal_text: String,
     pub error_modal_state: modal::State<ErrorModalState>,
 
@@ -44,6 +49,26 @@ pub struct AppUIState {
 }
 
 impl AppUIState {
+    pub fn new() -> Self {
+        let curr_theme = match env::var("THEME") {
+            Ok(s) => {
+                if s.to_lowercase() == "dark" {
+                    Theme::Dark
+                } else {
+                    Theme::Light
+                }
+            }
+            Err(_) => match dark_light::detect() {
+                dark_light::Mode::Light => Theme::Light,
+                dark_light::Mode::Dark => Theme::Dark,
+            },
+        };
+        Self {
+            curr_theme,
+            ..Default::default()
+        }
+    }
+
     pub fn reset_state(&mut self, reset_images: bool) {
         self.main_image_selected_image = None;
         self.main_image_selected_generation = None;
@@ -136,7 +161,8 @@ impl Application for AppState {
                         .center_x()
                         .center_y(),
                 )
-                .width(Length::Fill);
+                .width(Length::Fill)
+                .style(self.ui.curr_theme);
                 match (&self.load_images_state, &self.algorithm_state) {
                     (
                         LoadImagesState::NotLoaded | LoadImagesState::Loaded(_),
@@ -146,64 +172,88 @@ impl Application for AppState {
                 }
             })
             .push(Text::new("Алгоритм:"))
-            .push(Radio::new(
-                Algorithm::Genetic,
-                "Генетический",
-                Some(self.algorithm),
-                AppMessage::AlgorithmToggled,
-            ))
-            .push(Radio::new(
-                Algorithm::LoopConstraints,
-                "Циклических ограничений",
-                Some(self.algorithm),
-                AppMessage::AlgorithmToggled,
-            ))
+            .push(
+                Radio::new(
+                    Algorithm::Genetic,
+                    "Генетический",
+                    Some(self.algorithm),
+                    AppMessage::AlgorithmToggled,
+                )
+                .style(self.ui.curr_theme),
+            )
+            .push(
+                Radio::new(
+                    Algorithm::LoopConstraints,
+                    "Циклических ограничений",
+                    Some(self.algorithm),
+                    AppMessage::AlgorithmToggled,
+                )
+                .style(self.ui.curr_theme),
+            )
             .push(Text::new("Метод сравнения деталей:"))
-            .push(Radio::new(
-                CompatibilityMeasure::LabSSD,
-                "LAB SSD",
-                Some(self.compatibility_measure),
-                AppMessage::CompatibilityMeasureToggled,
-            ))
-            .push(Radio::new(
-                CompatibilityMeasure::MGC,
-                "MGC",
-                Some(self.compatibility_measure),
-                AppMessage::CompatibilityMeasureToggled,
-            ))
+            .push(
+                Radio::new(
+                    CompatibilityMeasure::LabSSD,
+                    "LAB SSD",
+                    Some(self.compatibility_measure),
+                    AppMessage::CompatibilityMeasureToggled,
+                )
+                .style(self.ui.curr_theme),
+            )
+            .push(
+                Radio::new(
+                    CompatibilityMeasure::MGC,
+                    "MGC",
+                    Some(self.compatibility_measure),
+                    AppMessage::CompatibilityMeasureToggled,
+                )
+                .style(self.ui.curr_theme),
+            )
             .push(Text::new("Размер детали:"))
-            .push(TextInput::new(
-                &mut self.ui.piece_size_number_input,
-                "",
-                &self.piece_size.to_string(),
-                AppMessage::PieceSizeChanged,
-            ));
+            .push(
+                TextInput::new(
+                    &mut self.ui.piece_size_number_input,
+                    "",
+                    &self.piece_size.to_string(),
+                    AppMessage::PieceSizeChanged,
+                )
+                .style(self.ui.curr_theme),
+            );
         let menu_column = match self.algorithm {
             Algorithm::Genetic => menu_column
                 .push(Text::new("Количество поколений:"))
-                .push(TextInput::new(
-                    &mut self.ui.generations_count_number_input,
-                    "",
-                    &self.generations_count.to_string(),
-                    AppMessage::GenerationsCountChanged,
-                ))
+                .push(
+                    TextInput::new(
+                        &mut self.ui.generations_count_number_input,
+                        "",
+                        &self.generations_count.to_string(),
+                        AppMessage::GenerationsCountChanged,
+                    )
+                    .style(self.ui.curr_theme),
+                )
                 .push(Text::new("Размер популяции:"))
-                .push(TextInput::new(
-                    &mut self.ui.population_size_number_input,
-                    "",
-                    &self.population_size.to_string(),
-                    AppMessage::PopulationSizeChanged,
-                )),
+                .push(
+                    TextInput::new(
+                        &mut self.ui.population_size_number_input,
+                        "",
+                        &self.population_size.to_string(),
+                        AppMessage::PopulationSizeChanged,
+                    )
+                    .style(self.ui.curr_theme),
+                ),
             Algorithm::LoopConstraints => menu_column,
         };
         let menu_column = menu_column
             .push(Text::new("Начальное значение ГПСЧ:"))
-            .push(TextInput::new(
-                &mut self.ui.rand_seed_number_input,
-                "",
-                &self.rand_seed.to_string(),
-                AppMessage::RandSeedChanged,
-            ))
+            .push(
+                TextInput::new(
+                    &mut self.ui.rand_seed_number_input,
+                    "",
+                    &self.rand_seed.to_string(),
+                    AppMessage::RandSeedChanged,
+                )
+                .style(self.ui.curr_theme),
+            )
             .push({
                 let button = Button::new(
                     &mut self.ui.start_algorithm_button,
@@ -213,7 +263,8 @@ impl Application for AppState {
                         .center_x()
                         .center_y(),
                 )
-                .width(Length::Fill);
+                .width(Length::Fill)
+                .style(self.ui.curr_theme);
                 match (&self.load_images_state, &self.algorithm_state) {
                     (
                         LoadImagesState::Loaded(_),
@@ -231,7 +282,8 @@ impl Application for AppState {
                         .center_x()
                         .center_y(),
                 )
-                .width(Length::Fill);
+                .width(Length::Fill)
+                .style(self.ui.curr_theme);
                 match (&self.load_images_state, &self.algorithm_state) {
                     (LoadImagesState::Loaded(_), AlgorithmState::Finished(_)) => {
                         button.on_press(AppMessage::SaveResultsPressed)
@@ -248,7 +300,8 @@ impl Application for AppState {
                         .center_x()
                         .center_y(),
                 )
-                .width(Length::Fill);
+                .width(Length::Fill)
+                .style(self.ui.curr_theme);
                 if self.ui.main_image_selected_image.is_some() {
                     button.on_press(AppMessage::SaveImagePressed)
                 } else {
@@ -282,7 +335,8 @@ impl Application for AppState {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x()
-                .center_y(),
+                .center_y()
+                .style(self.ui.curr_theme),
             );
 
             if gen_cnt > 1 {
@@ -299,7 +353,8 @@ impl Application for AppState {
                                         .height(Length::Fill)
                                         .center_x()
                                         .center_y(),
-                                );
+                                )
+                                .style(self.ui.curr_theme);
                                 if self.ui.main_image_selected_generation.unwrap() > 0 {
                                     button.on_press(AppMessage::FirstGenerationPressed)
                                 } else {
@@ -314,7 +369,8 @@ impl Application for AppState {
                                         .height(Length::Fill)
                                         .center_x()
                                         .center_y(),
-                                );
+                                )
+                                .style(self.ui.curr_theme);
                                 if self.ui.main_image_selected_generation.unwrap() > 0 {
                                     button.on_press(AppMessage::PrevGenerationPressed)
                                 } else {
@@ -337,7 +393,8 @@ impl Application for AppState {
                                         .height(Length::Fill)
                                         .center_x()
                                         .center_y(),
-                                );
+                                )
+                                .style(self.ui.curr_theme);
                                 if self.ui.main_image_selected_generation.unwrap() + 1 < gen_cnt {
                                     button.on_press(AppMessage::NextGenerationPressed)
                                 } else {
@@ -352,7 +409,8 @@ impl Application for AppState {
                                         .height(Length::Fill)
                                         .center_x()
                                         .center_y(),
-                                );
+                                )
+                                .style(self.ui.curr_theme);
                                 if self.ui.main_image_selected_generation.unwrap() + 1 < gen_cnt {
                                     button.on_press(AppMessage::LastGenerationPressed)
                                 } else {
@@ -361,7 +419,8 @@ impl Application for AppState {
                             }),
                     )
                     .width(Length::Fill)
-                    .center_x(),
+                    .center_x()
+                    .style(self.ui.curr_theme),
                 );
             }
 
@@ -371,26 +430,36 @@ impl Application for AppState {
                         Row::new()
                             .spacing(10)
                             .align_items(Alignment::Center)
-                            .push(Checkbox::new(
-                                self.ui.show_incorrect_pieces,
-                                "Показывать неправильные",
-                                AppMessage::ShowIncorrectPiecesCheckboxToggled,
-                            ))
-                            .push(Radio::new(
-                                false,
-                                "Прямое сравнение",
-                                Some(self.ui.show_incorrect_direct_neighbour),
-                                AppMessage::ShowIncorrectDirectNeighbourToggled,
-                            ))
-                            .push(Radio::new(
-                                true,
-                                "Сравнение по соседям",
-                                Some(self.ui.show_incorrect_direct_neighbour),
-                                AppMessage::ShowIncorrectDirectNeighbourToggled,
-                            )),
+                            .push(
+                                Checkbox::new(
+                                    self.ui.show_incorrect_pieces,
+                                    "Показывать неправильные",
+                                    AppMessage::ShowIncorrectPiecesCheckboxToggled,
+                                )
+                                .style(self.ui.curr_theme),
+                            )
+                            .push(
+                                Radio::new(
+                                    false,
+                                    "Прямое сравнение",
+                                    Some(self.ui.show_incorrect_direct_neighbour),
+                                    AppMessage::ShowIncorrectDirectNeighbourToggled,
+                                )
+                                .style(self.ui.curr_theme),
+                            )
+                            .push(
+                                Radio::new(
+                                    true,
+                                    "Сравнение по соседям",
+                                    Some(self.ui.show_incorrect_direct_neighbour),
+                                    AppMessage::ShowIncorrectDirectNeighbourToggled,
+                                )
+                                .style(self.ui.curr_theme),
+                            ),
                     )
                     .width(Length::Fill)
-                    .center_x(),
+                    .center_x()
+                    .style(self.ui.curr_theme),
                 )
                 .push(
                     Container::new(Row::new().spacing(10).align_items(Alignment::Center).push(
@@ -411,7 +480,8 @@ impl Application for AppState {
             .width(Length::FillPortion(1))
             .height(Length::Fill)
             .padding(5)
-            .spacing(10);
+            .spacing(10)
+            .style(self.ui.curr_theme);
 
         if let LoadImagesState::Loaded(data) = &self.load_images_state {
             for ((i, image_name), (image_handle, image_button)) in
@@ -431,7 +501,8 @@ impl Application for AppState {
                                     .width(Length::Fill)
                                     .center_x(),
                             ),
-                    );
+                    )
+                    .style(self.ui.curr_theme);
                     match self.algorithm_state {
                         AlgorithmState::Finished(_) => {
                             button.on_press(AppMessage::ImagesButtonPressed(i))
@@ -452,7 +523,8 @@ impl Application for AppState {
         let content_container = Container::new(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .center_x();
+            .center_x()
+            .style(self.ui.curr_theme);
 
         Modal::new(&mut self.ui.error_modal_state, content_container, |state| {
             Card::new(Text::new("Ошибка"), Text::new(&self.ui.error_modal_text))
@@ -463,6 +535,7 @@ impl Application for AppState {
                             Text::new("Ок").horizontal_alignment(alignment::Horizontal::Center),
                         )
                         .width(Length::Fill)
+                        .style(self.ui.curr_theme)
                         .on_press(AppMessage::ErrorModalMessage(
                             ErrorModalMessage::OkButtonPressed,
                         )),
