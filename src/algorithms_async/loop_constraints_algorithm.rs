@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Arc};
+use std::{error::Error, sync::Arc, time::Instant};
 
 use iced::Command;
 use image::RgbaImage;
@@ -26,6 +26,7 @@ pub struct AlgorithmDataRequest {
 pub struct AlgorithmDataResponse {
     pub images_processed: usize,
     pub solutions: Option<Vec<Solution>>,
+    pub run_times: Option<Vec<f32>>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +38,7 @@ pub struct AlgorithmData {
     pub img_height: usize,
     pub images_processed: usize,
     pub solutions: Vec<Vec<Solution>>,
+    pub run_times: Vec<Vec<f32>>,
 }
 
 impl AlgorithmData {
@@ -60,6 +62,7 @@ impl AlgorithmData {
             img_height: request.img_height,
             images_processed: request.images_processed,
             solutions: Vec::new(),
+            run_times: Vec::new(),
         }
     }
 
@@ -67,6 +70,9 @@ impl AlgorithmData {
         self.images_processed = response.images_processed;
         if let Some(solutions) = response.solutions {
             self.solutions.push(solutions);
+        }
+        if let Some(run_times) = response.run_times {
+            self.run_times.push(run_times);
         }
     }
 }
@@ -82,9 +88,14 @@ pub fn algorithm_next(
                 super::AlgorithmDataResponse::LoopConstraints(AlgorithmDataResponse {
                     images_processed: request.images_processed,
                     solutions: None,
+                    run_times: None,
                 }),
             ));
         }
+
+        // Время начала работы
+        let start_time = Instant::now();
+
         // Подготовка - вычисление совместимостей деталей
         let pieces_compatibility = request.compatibility_measure.calculate(
             &images[request.images_processed],
@@ -102,10 +113,14 @@ pub fn algorithm_next(
             &pieces_match_candidates,
         );
 
+        // Время завершения работы
+        let end_time = Instant::now();
+
         Ok(AlgorithmMessage::Update(
             super::AlgorithmDataResponse::LoopConstraints(AlgorithmDataResponse {
                 images_processed: request.images_processed + 1,
                 solutions: Some(new_solution),
+                run_times: Some(vec![(end_time - start_time).as_secs_f32()]),
             }),
         ))
     };

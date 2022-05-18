@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Arc};
+use std::{error::Error, sync::Arc, time::Instant};
 
 use iced::Command;
 use image::RgbaImage;
@@ -38,6 +38,7 @@ pub struct AlgorithmDataResponse {
     pub pieces_buddies: Option<[Vec<(usize, usize)>; 4]>,
     pub current_generation: Option<Vec<Solution>>,
     pub best_chromosome: Option<Solution>,
+    pub curr_time: Option<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +56,7 @@ pub struct AlgorithmData {
     pub pieces_buddies: Arc<[Vec<(usize, usize)>; 4]>,
     pub current_generation: Arc<Vec<Solution>>,
     pub best_chromosomes: Vec<Vec<Solution>>, // лучшая хромосома для каждого изображения и поколения
+    pub run_times: Vec<Vec<f32>>,
 }
 
 impl AlgorithmData {
@@ -91,6 +93,7 @@ impl AlgorithmData {
             pieces_buddies: request.pieces_buddies,
             current_generation: request.current_generation,
             best_chromosomes: Vec::new(),
+            run_times: Vec::new(),
         }
     }
 
@@ -113,6 +116,17 @@ impl AlgorithmData {
             }
             self.best_chromosomes.last_mut().unwrap().push(chromosome);
         }
+        if let Some(curr_time) = response.curr_time {
+            if self.images_processed == self.run_times.len() {
+                self.run_times.push(Vec::new());
+            }
+            let last_times = self.run_times.last_mut().unwrap();
+            if response.image_generations_processed == 1 {
+                *last_times.last_mut().unwrap() += curr_time;
+            } else {
+                last_times.push(curr_time);
+            }
+        }
     }
 }
 
@@ -132,6 +146,7 @@ pub fn algorithm_next(
                     pieces_buddies: None,
                     current_generation: None,
                     best_chromosome: None,
+                    curr_time: None,
                 }),
             ));
         }
@@ -146,11 +161,15 @@ pub fn algorithm_next(
                     pieces_buddies: Some([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
                     current_generation: None,
                     best_chromosome: None,
+                    curr_time: None,
                 }),
             ));
         }
         // Подготовка - вычисление совместимостей деталей
         if !request.image_prepared {
+            // Время начала работы
+            let start_time = Instant::now();
+
             let pieces_compatibility = request.compatibility_measure.calculate(
                 &images[request.images_processed],
                 request.img_width,
@@ -158,6 +177,10 @@ pub fn algorithm_next(
                 request.piece_size as usize,
             );
             let pieces_buddies = find_best_buddies(request.img_width, &pieces_compatibility);
+
+            // Время завершения работы
+            let end_time = Instant::now();
+
             return Ok(AlgorithmMessage::Update(
                 super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
                     rng: request.rng,
@@ -167,9 +190,13 @@ pub fn algorithm_next(
                     pieces_buddies: Some(pieces_buddies),
                     current_generation: None,
                     best_chromosome: None,
+                    curr_time: Some((end_time - start_time).as_secs_f32()),
                 }),
             ));
         }
+
+        // Время начала работы шага алгоритма
+        let start_time = Instant::now();
 
         let new_generation = algorithm_step(
             request.population_size,
@@ -182,6 +209,9 @@ pub fn algorithm_next(
             &request.current_generation,
         );
 
+        // Время завершения работы
+        let end_time = Instant::now();
+
         Ok(AlgorithmMessage::Update(
             super::AlgorithmDataResponse::Genetic(AlgorithmDataResponse {
                 rng: request.rng,
@@ -191,6 +221,7 @@ pub fn algorithm_next(
                 pieces_buddies: None,
                 best_chromosome: Some(new_generation[0].clone()),
                 current_generation: Some(new_generation),
+                curr_time: Some((end_time - start_time).as_secs_f32()),
             }),
         ))
     };

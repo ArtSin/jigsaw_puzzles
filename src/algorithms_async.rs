@@ -105,6 +105,13 @@ impl AlgorithmData {
         }
     }
 
+    pub fn run_times(&self) -> &Vec<Vec<f32>> {
+        match self {
+            AlgorithmData::Genetic(algorithm_data) => &algorithm_data.run_times,
+            AlgorithmData::LoopConstraints(algorithm_data) => &algorithm_data.run_times,
+        }
+    }
+
     pub fn create_request(&self) -> AlgorithmDataRequest {
         match self {
             Self::Genetic(algorithm_data) => {

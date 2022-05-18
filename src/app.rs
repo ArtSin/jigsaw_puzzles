@@ -110,6 +110,7 @@ impl AppState {
         }))
     }
 
+    // Сохранение результатов работы алгоритма (статистики) в файл
     pub fn save_results(&self) -> Result<Command<AppMessage>, Box<dyn Error>> {
         let images_data = match &self.load_images_state {
             LoadImagesState::Loaded(images_data) => images_data,
@@ -120,26 +121,34 @@ impl AppState {
             _ => unreachable!(),
         };
 
+        // Открытие диалога для сохранения файла
         let file_path_option = FileDialog::new()
             .add_filter("Таблица (.csv)", &["csv"])
             .show_save_single_file()?;
         if file_path_option.is_none() {
             return Ok(Command::none());
         }
+        // Открытие файла для записи
         let mut writer = BufWriter::new(File::create(file_path_option.unwrap())?);
 
+        // Названия столбцов: прямое сравнение, по соседям, время работы
         for image_name in &images_data.images_names {
             write!(writer, "direct_{},", image_name)?;
         }
+        for image_name in &images_data.images_names {
+            write!(writer, "neighbour_{},", image_name)?;
+        }
         for (image_i, image_name) in images_data.images_names.iter().enumerate() {
-            write!(writer, "neighbour_{}", image_name)?;
+            write!(writer, "time_{}", image_name)?;
             if image_i != images_data.loaded - 1 {
                 write!(writer, ",")?;
             }
         }
         writeln!(writer)?;
 
+        // Запись данных для каждого поколения (строки) и изображения (столбцы)
         for gen in 0..algorithm_data.generations_count() {
+            // Прямое сравнение
             for image_solutions in algorithm_data.solutions() {
                 write!(
                     writer,
@@ -147,16 +156,21 @@ impl AppState {
                     image_direct_comparison(algorithm_data.img_width(), &image_solutions[gen])
                 )?;
             }
-            for (image_i, image_solutions) in algorithm_data.solutions().iter().enumerate() {
+            // Сравнение по соседям
+            for image_solutions in algorithm_data.solutions() {
                 write!(
                     writer,
-                    "{:.2}",
+                    "{:.2},",
                     image_neighbour_comparison(
                         algorithm_data.img_width(),
                         algorithm_data.img_height(),
                         &image_solutions[gen]
                     )
                 )?;
+            }
+            // Время работы
+            for (image_i, image_run_times) in algorithm_data.run_times().iter().enumerate() {
+                write!(writer, "{:.9}", image_run_times[gen])?;
                 if image_i != images_data.loaded - 1 {
                     write!(writer, ",")?;
                 }
