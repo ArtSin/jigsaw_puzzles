@@ -849,7 +849,6 @@ pub fn algorithm_step(
         } else {
             max_compatibility - min_compatibility
         };
-        println!("{}, {}", min_compatibility, max_compatibility);
 
         // Выбранные для скрещивания предки
         let parents: Vec<_> = (0..(population_size - ELITISM_COUNT))

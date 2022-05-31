@@ -12,26 +12,40 @@ use rayon::iter::{
 
 use crate::Solution;
 
+// Матрица - двумерный массив, в каждой позиции которого находится деталь (пара из строки и столбца)
 type Matrix = Vec<Vec<(usize, usize)>>;
+// Приоритет матрицы - количество непустых позиций (со знаком минус) и значение совместимости между деталями
 type MatrixPriority = (isize, FloatOrd<f32>);
 
+// Совместимость матриц
 enum MatrixCompatibility {
+    // Совместимы: сдвиг между общими деталями, приоритет объединённой матрицы
     Compatible(isize, isize, MatrixPriority),
+    // Не совместимы (есть геометрический конфликт)
     Incompatible,
+    // Не связаны друг с другом (не более одной общей детали)
     NotRelated,
 }
 
+// Соотношение несовместимости, при котором две детали считаются парой-кандидатом
 const CANDIDATE_MATCH_RATIO: f32 = 1.15;
+// Соотношение несовместимости для отсечения одинаковых деталей
 const CANDIDATE_MATCH_RATIO_EQUAL: f32 = 1.0001;
+// Максимальное количество пар-кандидатов, которое может образовывать одна деталь в одном направлении
 const MAX_CANDIDATES: usize = 10;
+// То же, но для одинаковых деталей
 const MAX_CANDIDATES_EQUAL: usize = 7;
+// Соотношение деталей к пустым позициям в строке/столбце, при котором она/он вырезается
 const TRIM_RATE: f32 = 0.1;
 
+// Нахождение пар-кандидатов
 pub fn find_match_candidates(
     img_width: usize,
     pieces_compatibility: &[Vec<Vec<f32>>; 2],
 ) -> [Vec<Vec<(usize, usize)>>; 2] {
+    // Нахождение пар-кандидатов, в которых вторая деталь справа или снизу
     let get_candidates = |ind: usize| {
+        // Минимальные значения несовместимости для каждой детали в заданном направлении
         let min_scores = pieces_compatibility[ind]
             .par_iter()
             .enumerate()
@@ -44,16 +58,19 @@ pub fn find_match_candidates(
                     .unwrap()
             })
             .collect::<Vec<_>>();
+        // Нахождение пар-кандидатов для каждой детали
         pieces_compatibility[ind]
             .par_iter()
             .zip(min_scores)
             .enumerate()
             .map(|(i, (v, min_score))| {
+                // Все детали, для которых соотношение несовместимости не больше порога
                 let mut tmp: Vec<_> = v
                     .iter()
                     .enumerate()
                     .filter(|(j, x)| i != *j && **x <= CANDIDATE_MATCH_RATIO * min_score)
                     .collect();
+                // Выбор лучших пар с количеством не больше заданного порога
                 tmp.sort_by_key(|x| FloatOrd(*x.1));
                 tmp.into_iter()
                     .take(MAX_CANDIDATES)
@@ -75,7 +92,9 @@ pub fn find_match_candidates(
     let right_candidates = get_candidates(0);
     let down_candidates = get_candidates(1);
 
+    // Нахождение пар-кандидатов, в которых вторая деталь слева или сверху
     let get_opposite_candidates = |ind: usize| {
+        // Минимальные значения несовместимости для каждой детали в заданном направлении
         let min_scores = (0..pieces_compatibility[ind].len())
             .into_par_iter()
             .map(|i| {
@@ -89,16 +108,19 @@ pub fn find_match_candidates(
                     .unwrap()
             })
             .collect::<Vec<_>>();
+        // Нахождение пар-кандидатов для каждой детали
         (0..pieces_compatibility[ind].len())
             .into_par_iter()
             .zip(min_scores)
             .map(|(i, min_score)| {
+                // Все детали, для которых соотношение несовместимости не больше порога
                 let mut tmp: Vec<_> = pieces_compatibility[ind]
                     .iter()
                     .enumerate()
                     .map(|(j, v)| (j, v[i]))
                     .filter(|(j, x)| i != *j && *x <= CANDIDATE_MATCH_RATIO * min_score)
                     .collect();
+                // Выбор лучших пар с количеством не больше заданного порога
                 tmp.sort_by_key(|x| FloatOrd(x.1));
                 tmp.into_iter()
                     .take(MAX_CANDIDATES)
@@ -120,6 +142,7 @@ pub fn find_match_candidates(
     let left_candidates = get_opposite_candidates(0);
     let up_candidates = get_opposite_candidates(1);
 
+    // Выбор таких пар, в которых и первая деталь считает вторую своей парой, и наоборот
     let get_buddies = |candidates: Vec<Vec<(usize, usize)>>,
                        opposite_candidates: Vec<Vec<(usize, usize)>>| {
         candidates
@@ -139,7 +162,9 @@ pub fn find_match_candidates(
     [right_buddies, down_buddies]
 }
 
+// Определение совместимостей маленьких циклов
 fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
+    // Два маленьких цикла размера i x i слева направо: должны пересекаться в области размера i x (i - 1)
     let right_matches = sl
         .par_iter()
         .map(|sl_left| {
@@ -166,6 +191,7 @@ fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
         })
         .collect::<Vec<_>>();
 
+    // Два маленьких цикла размера i x i сверху вниз: должны пересекаться в области размера (i - 1) x i
     let down_matches = sl
         .par_iter()
         .map(|sl_up| {
@@ -195,6 +221,7 @@ fn small_loops_matches(size: usize, sl: &[Matrix]) -> [Vec<Vec<usize>>; 2] {
     [right_matches, down_matches]
 }
 
+// Объединение четырёх маленьких циклов размера i x i в один размера (i + 1) x (i + 1)
 fn merge_loops(
     size: usize,
     left_up: &Matrix,
@@ -218,11 +245,13 @@ fn merge_loops(
     new_loop
 }
 
+// Нахождение маленьких циклов
 fn small_loops(
     img_width: usize,
     img_height: usize,
     pieces_match_candidates: &[Vec<Vec<(usize, usize)>>; 2],
 ) -> Vec<Vec<Matrix>> {
+    // Циклы порядка 1 (пары-кандидаты)
     let sl_1_right = (0..img_height).flat_map(|left_r| {
         (0..img_width)
             .flat_map(|left_c| {
@@ -247,6 +276,7 @@ fn small_loops(
     });
     let sl_1 = sl_1_right.chain(sl_1_down).collect::<Vec<_>>();
 
+    // Циклы порядка 2 (из пар-кандидатов)
     let sl_2 = (0..img_height)
         .into_par_iter()
         .flat_map(|left_up_r| {
@@ -303,6 +333,7 @@ fn small_loops(
         })
         .collect::<Vec<_>>();
 
+    // Построение циклов следующих порядков
     let mut sl_all = vec![sl_1, sl_2];
     loop {
         let sl_last = sl_all.last().unwrap();
@@ -575,6 +606,7 @@ fn merge_matrices(
     m_new
 }
 
+// Объединение матриц
 fn merge_matrices_groups(
     img_width: usize,
     img_height: usize,
@@ -583,9 +615,15 @@ fn merge_matrices_groups(
 ) -> Vec<Matrix> {
     type AvailablePairsType = BTreeMap<MatrixPriority, Vec<(MatrixCompatibility, usize, usize)>>;
 
+    // Пары совместимых или несовместимых матриц в текущем множестве
+    // Сопоставление приоритету матрицы (результата объединения матриц или одной матрицы, выбранной из двух)
+    // кортежей из совместимостей матриц и их индексов
     let mut available_pairs: AvailablePairsType = BTreeMap::new();
+    // Матрицы, удалённые из множества
     let mut used = Vec::new();
+    // Множество-результат объединения пар матриц
     let mut matrices_last = Vec::new();
+    // Обработка новой матрицы
     let add_new_matrix = |available_pairs: &mut AvailablePairsType,
                           used: &mut Vec<bool>,
                           matrices_last: &mut Vec<(Matrix, MatrixPriority)>,
@@ -594,29 +632,36 @@ fn merge_matrices_groups(
         let m_x_i = matrices_last.len();
         let m_x_priority = matrix_priority(img_width, pieces_compatibility, &m_x);
         if check {
+            // Обработка пар из текущей матрицы и всех остальных в множестве
             let tmp: Vec<_> = matrices_last
                 .par_iter()
                 .enumerate()
                 .filter_map(|(m_y_i, (m_y, m_y_priority))| {
+                    // Матрица уже удалена
                     if used[m_y_i] {
                         return None;
                     }
                     let order = m_x_priority < *m_y_priority;
+                    // Определение совместимости матриц
                     let can_merge = if order {
                         can_merge_matrices(img_width, img_height, pieces_compatibility, &m_x, m_y)
                     } else {
                         can_merge_matrices(img_width, img_height, pieces_compatibility, m_y, &m_x)
                     };
 
+                    // Приоритет матрицы-результата
                     let pairs_key = match can_merge {
+                        // Если матрицы совместимы, то приоритет матрицы-объединения
                         MatrixCompatibility::Compatible(_, _, m_new_priority) => m_new_priority,
                         MatrixCompatibility::Incompatible => {
+                            // Если матрицы не совместимы, выбирается более приоритетная
                             if order {
                                 m_x_priority
                             } else {
                                 *m_y_priority
                             }
                         }
+                        // Если матрицы не связаны, то пара не добавляется
                         MatrixCompatibility::NotRelated => return None,
                     };
 
@@ -627,6 +672,7 @@ fn merge_matrices_groups(
                     }
                 })
                 .collect();
+            // Добавление всех пар
             for (pairs_key, x) in tmp {
                 let v = match available_pairs.get_mut(&pairs_key) {
                     Some(v) => v,
@@ -638,10 +684,12 @@ fn merge_matrices_groups(
                 v.push(x);
             }
         }
+        // Добавление матрицы в множество
         used.push(false);
         matrices_last.push((m_x, m_x_priority));
     };
 
+    // Обработка всех маленьких циклов по убыванию порядка
     for sl_curr in sl_all.into_iter().rev() {
         for sl in sl_curr.into_iter() {
             add_new_matrix(
@@ -653,6 +701,7 @@ fn merge_matrices_groups(
             );
         }
 
+        // Пока возможно, выбирается пара совместимых или не совместимых матриц и заменяется одной
         while !available_pairs.is_empty() {
             let (pairs_key, pairs_v) = available_pairs.iter_mut().next().unwrap();
             if pairs_v.is_empty() {
@@ -666,6 +715,7 @@ fn merge_matrices_groups(
             }
 
             match m_comp {
+                // Если матрицы совместимы, то оригинальные матрицы удаляются и добавляется их объединение
                 MatrixCompatibility::Compatible(shared_shift_r, shared_shift_c, _) => {
                     let m_new = merge_matrices(
                         &matrices_last[x_i].0,
@@ -684,6 +734,7 @@ fn merge_matrices_groups(
                         true,
                     );
                 }
+                // Если матрицы не совместимы, то удаляется менее приоритетная
                 MatrixCompatibility::Incompatible => {
                     used[y_i] = true;
                 }
@@ -691,6 +742,7 @@ fn merge_matrices_groups(
             }
         }
 
+        // Удаление всех матриц, помеченных к удалению
         let matrices_next: Vec<_> = matrices_last
             .iter()
             .enumerate()
@@ -710,12 +762,14 @@ fn merge_matrices_groups(
         }
     }
 
+    // Результирующее множество матриц, отсортированных по приоритету
     matrices_last.sort_by_key(|m| m.1);
     matrices_last.into_iter().map(|m| m.0).collect()
 }
 
 // Отрезание почти пустых краёв
 fn trim(solution_r: usize, solution_c: usize, solution: Solution) -> (usize, usize, Solution) {
+    // Границы изображения
     let (mut min_r, mut max_r, mut min_c, mut max_c) = (0, solution_r - 1, 0, solution_c - 1);
     loop {
         // Количество непустых деталей в верхней строке
@@ -779,6 +833,7 @@ fn trim(solution_r: usize, solution_c: usize, solution: Solution) -> (usize, usi
     )
 }
 
+// Жадное заполнение пустых позиций
 fn fill_greedy(
     img_width: usize,
     img_height: usize,
@@ -788,11 +843,14 @@ fn fill_greedy(
     old_solution: Solution,
 ) -> Solution {
     let (missing_r, missing_c) = (img_height - old_solution_r, img_width - old_solution_c);
+    // Так как дополнение изображения может идти в любую сторону,
+    // высота и ширина больше необходимой на количество отсутствующих строк и столбцов
     let (solution_r, solution_c) = (
         old_solution_r + 2 * missing_r,
         old_solution_c + 2 * missing_c,
     );
     let mut solution = vec![(usize::MAX, usize::MAX); solution_r * solution_c];
+    // Копирование старого решения в новое
     for r in 0..old_solution_r {
         for c in 0..old_solution_c {
             solution[(r + missing_r) * solution_c + c + missing_c] =
@@ -803,6 +861,7 @@ fn fill_greedy(
     let (mut min_r, mut max_r, mut min_c, mut max_c) =
         (missing_r, img_height - 1, missing_c, img_width - 1);
 
+    // Неиспользованные детали
     let mut free_pieces: IndexSet<_, FxBuildHasher> = (0..img_height)
         .flat_map(|r| (0..img_width).map(move |c| (r, c)))
         .collect();
@@ -810,6 +869,7 @@ fn fill_greedy(
         free_pieces.remove(piece);
     }
 
+    // Свободные позиции (по количеству свободных соседей)
     let mut free_positions: [IndexSet<(usize, usize), FxBuildHasher>; 5] = [
         IndexSet::with_hasher(FxBuildHasher::default()),
         IndexSet::with_hasher(FxBuildHasher::default()),
@@ -817,6 +877,7 @@ fn fill_greedy(
         IndexSet::with_hasher(FxBuildHasher::default()),
         IndexSet::with_hasher(FxBuildHasher::default()),
     ];
+    // Добавление позиции в множество свободных
     let add_to_free_positions = |solution: &mut Solution,
                                  free_positions: &mut [IndexSet<(usize, usize), FxBuildHasher>;
                                           5],
@@ -829,6 +890,7 @@ fn fill_greedy(
         if solution[r * solution_c + c].0 != usize::MAX {
             return;
         }
+        // Вычисление количества свободных соседей
         let mut cnt = 0;
         for dr in [-1isize, 1] {
             for dc in [-1isize, 1] {
@@ -849,6 +911,7 @@ fn fill_greedy(
         }
         free_positions[cnt].insert((r, c));
     };
+    // Добавление всех свободных позиций
     for r in 0..solution_r {
         for c in 0..solution_c {
             add_to_free_positions(
@@ -864,7 +927,9 @@ fn fill_greedy(
         }
     }
 
+    // Пока есть неиспользованные детали, найти для каждой позицию
     while !free_pieces.is_empty() {
+        // Выбирается позиция с наименьшим количеством свободных соседей
         for cnt in 0..=4 {
             if free_positions[cnt].is_empty() {
                 continue;
@@ -949,6 +1014,7 @@ fn fill_greedy(
                 best_compatibility = res;
             }
 
+            // Назначение детали, удаление позиции из свободных
             free_pieces.remove(&best_piece);
             free_positions[cnt].remove(&(pos_r, pos_c));
             solution[pos_r * solution_c + pos_c] = best_piece;
@@ -970,6 +1036,7 @@ fn fill_greedy(
                 max_c = pos_c;
             }
 
+            // Обновление свободной позиции слева
             if pos_c != 0 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r, pos_c - 1)) {
@@ -987,6 +1054,7 @@ fn fill_greedy(
                     }
                 }
             }
+            // Обновление свободной позиции справа
             if pos_c != solution_c - 1 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r, pos_c + 1)) {
@@ -1004,6 +1072,7 @@ fn fill_greedy(
                     }
                 }
             }
+            // Обновление свободной позиции сверху
             if pos_r != 0 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r - 1, pos_c)) {
@@ -1021,6 +1090,7 @@ fn fill_greedy(
                     }
                 }
             }
+            // Обновление свободной позиции снизу
             if pos_r != solution_r - 1 {
                 for cnt_adj in 0..=4 {
                     if free_positions[cnt_adj].remove(&(pos_r + 1, pos_c)) {
@@ -1056,16 +1126,18 @@ fn fill_greedy(
         .collect()
 }
 
-// Шаг алгоритма
+// Шаг алгоритма (обработка одного изображения)
 pub fn algorithm_step(
     img_width: usize,
     img_height: usize,
     pieces_compatibility: &[Vec<Vec<f32>>; 2],
     pieces_match_candidates: &[Vec<Vec<(usize, usize)>>; 2],
 ) -> Vec<Solution> {
+    // Нахождение маленьких циклов
     let sl_all = small_loops(img_width, img_height, pieces_match_candidates);
-    println!("{:?}", sl_all.iter().map(|v| v.len()).collect::<Vec<_>>());
+    // Объединение матриц
     let matrices_last = merge_matrices_groups(img_width, img_height, pieces_compatibility, sl_all);
+    // Выбор лучшей матрицы в качестве решения
     let matrices_last_first = matrices_last.first().unwrap();
     let (solution_r, solution_c) = (matrices_last_first.len(), matrices_last_first[0].len());
     let mut solution = vec![(usize::MAX, usize::MAX); solution_r * solution_c];
@@ -1076,6 +1148,7 @@ pub fn algorithm_step(
             }
         }
     }
+    // Отрезание почти пустых краёв и жадное заполнение пустых позиций
     let (solution_r, solution_c, solution) = trim(solution_r, solution_c, solution);
     let new_solution = fill_greedy(
         img_width,
