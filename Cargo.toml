@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 iced = { version = "0.4.2", features = ["image", "tokio"] }
-iced_aw = { git = "https://github.com/genusistimelord/iced_aw", branch = "beta", default-features = false, features = ["card", "modal", "colors"] }
+iced_aw = { version = "0.2.0", default-features = false, features = ["card", "modal", "colors"] }
 native-dialog = "0.6.3"
 image = "0.24.2"
 lab = "0.11.0"
@@ -16,6 +16,6 @@ rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 float-ord = "0.3.2"
 rayon = "1.5.3"
-indexmap = "1.8.2"
+indexmap = "1.9.0"
 fxhash = "0.2.1"
 dark-light = "0.2.2"
